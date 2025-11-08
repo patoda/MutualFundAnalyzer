@@ -16,6 +16,9 @@ from scipy import optimize
 import qrcode
 from io import BytesIO
 import base64
+import tempfile
+import os
+import time
 
 # Set page config
 st.set_page_config(
@@ -64,12 +67,34 @@ def show_donation_banner():
             <h3 style="margin: 0; color: white;">☕ Buy me a treat :)</h3>
             <div style="background-color: rgba(255,255,255,0.2); padding: 0.6rem; 
                         border-radius: 0.5rem; margin-top: 0.8rem; font-family: monospace; font-size: 1.1rem;">
-                {upi_id}
+                <span id="upi-id">{upi_id}</span>
+                <button onclick="copyUPI()" style="margin-left: 1rem; background-color: rgba(255,255,255,0.3); 
+                        border: 1px solid rgba(255,255,255,0.5); color: white; padding: 0.3rem 0.8rem; 
+                        border-radius: 0.3rem; cursor: pointer; font-size: 0.9rem;">
+                    📋 Copy
+                </button>
             </div>
             <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; opacity: 0.9;">
                 💳 Works with GPay, PhonePe, Paytm & all UPI apps
             </p>
         </div>
+        
+        <script>
+        function copyUPI() {{
+            const upiId = document.getElementById('upi-id').textContent;
+            navigator.clipboard.writeText(upiId).then(function() {{
+                // Show success message
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.backgroundColor = 'rgba(76, 175, 80, 0.5)';
+                setTimeout(function() {{
+                    btn.innerHTML = originalText;
+                    btn.style.backgroundColor = 'rgba(255,255,255,0.3)';
+                }}, 2000);
+            }});
+        }}
+        </script>
         """.format(upi_id=upi_id), unsafe_allow_html=True)
         
         # UPI deep link button for mobile users
@@ -416,20 +441,38 @@ def calculate_cagr(invested, current_value, days):
         return 0
 
 
-@st.cache_data(show_spinner="Processing PDF CAS... This may take a minute on first load.", hash_funcs={str: lambda x: x})
-def process_pdf(pdf_path, password):
-    """Process PDF and return all calculated data. Results are cached based on file path and password."""
+@st.cache_data(show_spinner=False)
+def process_pdf(pdf_bytes, password):
+    """Process PDF and return all calculated data. Results are cached based on file content and password."""
     
-    # Parse PDF - now returns transactions AND current NAVs from Closing Balance lines
-    transactions_df, current_navs = parse_pdf_cas(pdf_path, password)
-    
-    if len(transactions_df) == 0:
-        return None
-    
-    # Calculate current lots
-    lots_df = calculate_fifo_lots(transactions_df)
-    
-    if len(lots_df) == 0:
+    try:
+        # Write bytes to temp file for pdfplumber
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            tmp_file.write(pdf_bytes)
+            pdf_path = tmp_file.name
+        
+        try:
+            # Parse PDF - now returns transactions AND current NAVs from Closing Balance lines
+            transactions_df, current_navs = parse_pdf_cas(pdf_path, password)
+            
+            if len(transactions_df) == 0:
+                return None
+            
+            # Calculate current lots
+            lots_df = calculate_fifo_lots(transactions_df)
+            
+            if len(lots_df) == 0:
+                return None
+            
+        finally:
+            # Clean up temp file
+            if os.path.exists(pdf_path):
+                try:
+                    os.unlink(pdf_path)
+                except:
+                    pass
+        
+    except Exception as e:
         return None
     
     # Use current NAVs from Closing Unit Balance lines (most accurate)
@@ -550,125 +593,240 @@ st.markdown("""
 # App title
 st.markdown('<div class="main-header">💼 Portfolio Analyzer</div>', unsafe_allow_html=True)
 
-# Sidebar
-with st.sidebar:
-    st.header("📁 Load CAS Statement")
-    
-    uploaded_pdf = st.file_uploader("Upload PDF CAS", type=['pdf'])
-    password = st.text_input("PDF Password", type="password")
-    
-    if uploaded_pdf:
-        # Save uploaded file temporarily
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-            tmp_file.write(uploaded_pdf.read())
-            pdf_path = tmp_file.name
-    else:
-        pdf_path = None
-    
-    st.markdown("---")
-    st.header("⚙️ Settings")
-    ltcg_budget = st.number_input(
-        "LTCG Budget (₹)",
-        min_value=10000,
-        max_value=500000,
-        value=100000,
-        step=10000,
-        help="Total Long-Term Capital Gains budget for tax harvesting"
-    )
-    
-    st.markdown("---")
-    st.markdown("### 📊 About")
-    st.info("""
-    This app helps you:
-    - Parse PDF CAS directly
-    - View portfolio summary
-    - Analyze LT/ST holdings
-    - Tax harvest individual schemes
-    - Create multi-fund balanced strategy
-    """)
-    
-    st.warning("""
-    ⏱️ **First Load**: PDF processing takes 30-60 seconds on first load. 
-    Subsequent loads are instant (cached).
-    """)
-    
-    if st.button("🗑️ Clear Cache", help="Clear cached data and reload PDF"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### ☕ Support This Tool")
-    st.markdown("""
-    <div style="background-color: #f0f8ff; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #4CAF50;">
-        <p style="margin: 0; font-size: 0.9rem;">If you find this tool useful, consider supporting its development!</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    upi_id = "ankitpatodiya@okicici"
-    
-    # Display UPI ID with copy button
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.code(upi_id, language=None)
-    with col2:
-        if st.button("📋", help="Copy UPI ID"):
-            st.toast("✅ UPI ID copied!", icon="✅")
-    
-    # Add JavaScript to copy to clipboard when button is clicked
-    st.markdown(f"""
-    <script>
-        navigator.clipboard.writeText('{upi_id}');
-    </script>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <p style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
-        💳 Pay via any UPI app (GPay, PhonePe, Paytm, etc.)
-    </p>
-    """, unsafe_allow_html=True)
+# Initialize session state for active tab if not exists
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = 0
 
-# Main app
-if pdf_path and password:
-    # Process PDF (cached, so only slow on first run)
-    data = process_pdf(pdf_path, password)
+# Ensure nav_radio matches active_tab when active_tab is changed programmatically
+# This prevents the radio button from showing the wrong selection
+if 'nav_radio' in st.session_state and st.session_state.nav_radio != st.session_state.active_tab:
+    # active_tab was changed programmatically, sync nav_radio
+    st.session_state.nav_radio = st.session_state.active_tab
+
+# Initialize session state for processed data
+if 'processed_data' not in st.session_state:
+    st.session_state.processed_data = None
+if 'ltcg_budget' not in st.session_state:
+    st.session_state.ltcg_budget = 100000
+
+# Initialize file tracking
+if 'last_uploaded_file_id' not in st.session_state:
+    st.session_state.last_uploaded_file_id = None
+
+# Tab names - Landing page is first
+tab_names = ["🏠 Landing Page", "📊 Portfolio Overview", "📋 All Holdings", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
+
+# Callback to update active tab when user clicks
+def on_tab_change():
+    st.session_state.active_tab = st.session_state.nav_radio
+
+# Radio button for navigation with callback
+selected_tab = st.radio(
+    "Navigation",
+    range(len(tab_names)),
+    format_func=lambda x: tab_names[x],
+    index=st.session_state.active_tab,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="nav_radio",
+    on_change=on_tab_change
+)
+
+# Use session state value for rendering (this is the source of truth)
+active_tab = st.session_state.active_tab
+
+# LANDING PAGE TAB
+if active_tab == 0:
+    st.header("📁 Upload Your CAS Statement")
     
-    if data is None:
-        st.error("❌ Failed to process PDF. Please check the file and password.")
-        st.stop()
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        uploaded_pdf = st.file_uploader("**STEP 1: Upload PDF CAS**", type=['pdf'], help="Click 'Browse files' button to select your CAS PDF")
+        
+        # Track file changes - clear processed data ONLY when a different file is uploaded
+        if uploaded_pdf is not None:
+            current_file_id = f"{uploaded_pdf.name}_{uploaded_pdf.size}"
+            
+            # Check if this is a different file than before
+            if 'last_uploaded_file_id' in st.session_state:
+                if st.session_state.last_uploaded_file_id != current_file_id:
+                    # Different file uploaded - clear old data
+                    st.session_state.processed_data = None
+                    st.session_state.last_uploaded_file_id = current_file_id
+                    st.info(f"📎 New file detected: **{uploaded_pdf.name}**")
+            else:
+                # First file upload
+                st.session_state.last_uploaded_file_id = current_file_id
+        
+    with col2:
+        password = st.text_input("**STEP 2: Enter Password**", type="password", help="Enter the password from your email (leave blank if no password)")
+    
+    # Process button
+    process_clicked = False
+    if uploaded_pdf:
+        process_clicked = st.button("**STEP 3: Process PDF** 🚀", type="primary", use_container_width=True)
+    
+    # Process PDF when button is clicked - RIGHT BELOW THE BUTTON
+    if process_clicked and uploaded_pdf:
+        with st.spinner('🔄 Processing PDF CAS... This may take a minute...'):
+            # Reset file pointer to beginning
+            uploaded_pdf.seek(0)
+            
+            # Read file bytes
+            pdf_bytes = uploaded_pdf.read()
+            
+            try:
+                # Process PDF - use None if password is empty
+                pdf_password = password if password else None
+                data = process_pdf(pdf_bytes, pdf_password)
+                
+                # Check what we got
+                if data is None:
+                    st.error("❌ **📄 No valid CAS data found! This doesn't appear to be a valid Consolidated Account Statement. Please ensure you uploaded the correct PDF.**")
+                elif 'lots_df' not in data or len(data['lots_df']) == 0:
+                    st.error("❌ **📄 No holdings found in CAS! The PDF was processed but no current holdings were found. You may have zero balance in all schemes.**")
+                elif 'transactions_df' not in data or len(data['transactions_df']) == 0:
+                    st.error("❌ **📄 No transactions found in CAS! The PDF format might not be supported.**")
+                else:
+                    # Store in session state
+                    st.session_state.processed_data = data
+                    
+                    # Show success
+                    st.success(f"✅ **Success!** Loaded {len(data['transactions_df'])} transactions, {data['lots_df']['scheme'].nunique()} schemes, {len(data['lots_df'])} lots")
+                    
+                    # Switch to Portfolio Overview tab (index 1)
+                    st.session_state.active_tab = 1
+                    
+                    # Rerun to switch tabs
+                    st.rerun()
+                    
+            except Exception as e:
+                # Handle any errors during processing
+                error_msg = str(e)
+                exception_type = type(e).__name__
+                
+                # Check for password-related errors
+                password_keywords = [
+                    "password", "decrypt", "encrypted", "authentication", 
+                    "incorrect password", "file has not been decrypted",
+                    "pdferror", "owner password", "user password",
+                    "not allowed", "encrypted pdf", "permissionerror"
+                ]
+                
+                # Check for invalid format errors
+                format_keywords = [
+                    "index", "list index", "keyerror", "attributeerror",
+                    "nonetype", "pages", "extract_text"
+                ]
+                
+                # Determine error type
+                is_password_error = (
+                    exception_type in ["PdfminerException", "PermissionError", "PdfReadError"] or
+                    any(keyword in error_msg.lower() for keyword in password_keywords) or
+                    any(keyword in exception_type.lower() for keyword in ["permission", "password", "decrypt"]) or
+                    (exception_type == "PdfminerException" and len(error_msg.strip()) < 5)
+                )
+                
+                is_format_error = (
+                    exception_type in ["IndexError", "KeyError", "AttributeError", "TypeError"] or
+                    any(keyword in error_msg.lower() for keyword in format_keywords)
+                )
+                
+                if is_password_error:
+                    st.error("❌ **🔒 WRONG PASSWORD!** The password you entered is incorrect. Please check your email for the correct password.")
+                    st.warning("💡 **Tip:** Check your email for the correct password. It's usually sent along with the CAS PDF link.")
+                elif is_format_error:
+                    st.error("❌ **📄 Invalid File Format!** This doesn't appear to be a valid CAS (Consolidated Account Statement) PDF. Please upload a CAS statement from CAMS/Karvy.")
+                else:
+                    st.error(f"❌ **⚠️ Error:** {exception_type} - {error_msg if error_msg else 'Unknown error'}")
+    
+    st.markdown("---")
+    
+    # Show appropriate content on landing page
+    if st.session_state.processed_data is not None and not process_clicked:
+        # Data has been processed and we're back on landing page
+        st.success("✅ **Portfolio data loaded!** Navigate to other tabs to view analysis.")
+        
+        data = st.session_state.processed_data
+        st.info(f"📊 Loaded: {len(data['transactions_df'])} transactions | {data['lots_df']['scheme'].nunique()} schemes | {len(data['lots_df'])} lots")
+        
+        st.markdown("**Ready to explore:**")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("📊 Portfolio Overview", use_container_width=True, type="primary"):
+                st.session_state.active_tab = 1
+                st.rerun()
+        with col2:
+            if st.button("📋 All Holdings", use_container_width=True):
+                st.session_state.active_tab = 2
+                st.rerun()
+        with col3:
+            if st.button("💰 Tax Harvest", use_container_width=True):
+                st.session_state.active_tab = 3
+                st.rerun()
+        with col4:
+            if st.button("🎯 Multi-Fund", use_container_width=True):
+                st.session_state.active_tab = 4
+                st.rerun()
+        
+        # Show donation banner at bottom
+        show_donation_banner()
     else:
+        # Show welcome screen when no file uploaded or currently processing
+        st.subheader("Welcome! 👋")
+        
+        st.write("This tool helps you analyze your mutual fund portfolio and optimize tax harvesting strategies.")
+        
+        st.info("""
+        **How to get your CAS (Consolidated Account Statement):**
+        
+        1. Visit [CAMS website](https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement)
+        2. Enter your email ID registered with mutual funds
+        3. Select "Detailed" statement type
+        4. Choose date range (e.g., Since Inception)
+        5. Select "Password Protected" PDF format
+        6. Submit and check your email
+        7. You'll receive the PDF with password in the email
+        8. Upload that PDF here!
+        """)
+        
+        st.markdown("---")
+        
+        st.markdown("""
+        **Features:**
+        - 📊 Complete portfolio analysis with XIRR calculations
+        - 💰 Tax harvesting recommendations (LTCG optimization)
+        - 📈 Scheme-wise performance tracking
+        - 🎯 Multi-fund balanced harvesting strategies
+        """)
+        
+        # Show donation banner at bottom
+        show_donation_banner()
+
+# OTHER TABS - Use data from session state
+elif active_tab > 0:
+    # Check if data is available
+    if st.session_state.processed_data is None:
+        st.warning("⚠️ No portfolio data loaded. Please go to the Landing Page to upload your CAS PDF.")
+        if st.button("← Go to Landing Page", key="goto_landing"):
+            st.session_state.active_tab = 0
+            st.rerun()
+    else:
+        # Extract data from session state
+        data = st.session_state.processed_data
         lots_df = data['lots_df']
         transactions_df = data['transactions_df']
         nav_dict = data['nav_dict']
+        ltcg_budget = st.session_state.ltcg_budget
         
-        # Initialize session state for active tab if not exists
-        if 'active_tab' not in st.session_state:
-            st.session_state.active_tab = 0
-        
-        # Show quick stats at top
-        st.success(f"✅ Loaded: {len(transactions_df)} transactions, {lots_df['scheme'].nunique()} schemes, {len(lots_df)} current lots")
-        
-        # Tab selection with callback to update session state
-        tab_names = ["📊 Portfolio Overview", "📋 All Holdings", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
-        
-        # Create tabs but control which one is active
-        selected_tab = st.radio(
-            "Navigation",
-            range(len(tab_names)),
-            format_func=lambda x: tab_names[x],
-            index=st.session_state.active_tab,
-            horizontal=True,
-            key="tab_selector",
-            label_visibility="collapsed"
-        )
-        
-        # Update active tab in session state
-        st.session_state.active_tab = selected_tab
+        # Show quick info bar at top
+        st.info(f"📊 Loaded: {len(transactions_df)} transactions | {lots_df['scheme'].nunique()} schemes | {len(lots_df)} lots | LTCG Budget: ₹{format_indian_number(ltcg_budget)}")
         
         st.markdown("---")
         
         # Display content based on selected tab
-        if selected_tab == 0:
+        if active_tab == 1:
             # TAB 1: Portfolio Overview
             st.header("Portfolio Overview")
             
@@ -814,7 +972,7 @@ if pdf_path and password:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif selected_tab == 1:
+        elif active_tab == 2:
             # TAB 2: All Holdings
             st.header("All Holdings")
             
@@ -1071,9 +1229,33 @@ if pdf_path and password:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif selected_tab == 2:
+        elif active_tab == 3:
             # TAB 3: Single-Scheme Tax Harvest
             st.header("Single-Scheme Tax Harvesting")
+            
+            # LTCG Budget Setting
+            st.subheader("⚙️ LTCG Budget")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                ltcg_budget_input = st.number_input(
+                    "**LTCG Budget (₹)**",
+                    min_value=5000,
+                    max_value=500000,
+                    value=st.session_state.ltcg_budget,
+                    step=5000,
+                    help="Total Long-Term Capital Gains budget for tax harvesting per scheme",
+                    key="ltcg_input_single"
+                )
+                # Update session state
+                st.session_state.ltcg_budget = ltcg_budget_input
+                ltcg_budget = ltcg_budget_input
+            with col2:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+            
+            st.info("💡 **What is LTCG Budget?** This is the maximum long-term profit you want to realize by selling units. The tool will show which units to sell to achieve this target profit.")
+            
+            st.markdown("---")
             
             st.info(f"Each scheme shows units to sell for ₹{format_indian_number(ltcg_budget)} LTCG (individual scheme basis)")
             
@@ -1329,9 +1511,33 @@ if pdf_path and password:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif selected_tab == 3:
+        elif active_tab == 4:
             # TAB 4: Multi-Fund Strategy
             st.header("🎯 Multi-Fund Balanced Tax Harvesting Strategy")
+            
+            # LTCG Budget Setting
+            st.subheader("⚙️ LTCG Budget")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                ltcg_budget_input = st.number_input(
+                    "**LTCG Budget (₹)**",
+                    min_value=5000,
+                    max_value=500000,
+                    value=st.session_state.ltcg_budget,
+                    step=5000,
+                    help="Total Long-Term Capital Gains budget for tax harvesting across all selected funds",
+                    key="ltcg_input_multi"
+                )
+                # Update session state
+                st.session_state.ltcg_budget = ltcg_budget_input
+                ltcg_budget = ltcg_budget_input
+            with col2:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+            
+            st.info("💡 **What is LTCG Budget?** This is the maximum long-term profit you want to realize by selling units across all selected funds. The strategy will distribute this target profit among the funds based on your chosen distribution method.")
+            
+            st.markdown("---")
             
             st.markdown(f"""
             <div class="metric-card">
@@ -1757,47 +1963,3 @@ if pdf_path and password:
             
             # Show donation banner at bottom
             show_donation_banner()
-
-else:
-    # Welcome screen
-    st.markdown("""
-    <div style="text-align: center; padding: 3rem;">
-        <h2>Welcome to Portfolio Analyzer! 👋</h2>
-        <p style="font-size: 1.2rem; color: #666;">
-            Configure the PDF CAS in the sidebar to get started.
-        </p>
-        <br>
-        <div style="background-color: #e7f3ff; padding: 2rem; border-radius: 1rem; margin: 2rem 0;">
-            <h3>📋 How to Get Your CAS Statement:</h3>
-            <ol style="text-align: left; max-width: 700px; margin: 0 auto; line-height: 1.8;">
-                <li>Visit <a href="https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement" target="_blank"><b>CAMS Online</b></a></li>
-                <li>Choose <b>"Detailed"</b> statement type</li>
-                <li>Select <b>"Specific Period"</b></li>
-                <li>Choose a period covering your <b>entire mutual fund journey</b> (from when you bought your first mutual fund to current date)</li>
-                <li>Enter your email and PAN</li>
-                <li>Download the password-protected PDF sent to your email</li>
-            </ol>
-        </div>
-        <br>
-        <div style="background-color: #d4edda; padding: 2rem; border-radius: 1rem; margin: 2rem 0;">
-            <h3>🚀 Using the App:</h3>
-            <ol style="text-align: left; max-width: 600px; margin: 0 auto; line-height: 1.8;">
-                <li>Upload your CAS PDF using the sidebar</li>
-                <li>Enter the PDF password</li>
-                <li>Explore different tabs for portfolio analysis</li>
-                <li>Use Multi-Fund Strategy tab for balanced tax harvesting</li>
-            </ol>
-        </div>
-        <br>
-        <div style="background-color: #fff3cd; padding: 1.5rem; border-radius: 1rem;">
-            <h4>✨ Features:</h4>
-            <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
-                <li><b>Direct PDF Processing</b> - No Excel needed!</li>
-                <li><b>Automatic Fund Classification</b> - Equity/Debt/International</li>
-                <li><b>FIFO-based Tax Harvesting</b> - Accurate lot-level calculations</li>
-                <li><b>Multi-Fund Strategy</b> - Balanced redemption across multiple funds</li>
-            </ul>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
