@@ -1753,11 +1753,23 @@ else:
         </p>
         <br>
         <div style="background-color: #e7f3ff; padding: 2rem; border-radius: 1rem; margin: 2rem 0;">
-            <h3>📋 How to Use:</h3>
-            <ol style="text-align: left; max-width: 600px; margin: 0 auto;">
-                <li>Use the default PDF or upload your own CAS statement</li>
+            <h3>📋 How to Get Your CAS Statement:</h3>
+            <ol style="text-align: left; max-width: 700px; margin: 0 auto; line-height: 1.8;">
+                <li>Visit <a href="https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement" target="_blank"><b>CAMS Online</b></a></li>
+                <li>Choose <b>"Detailed"</b> statement type</li>
+                <li>Select <b>"Specific Period"</b></li>
+                <li>Choose a period covering your <b>entire mutual fund journey</b> (from when you bought your first mutual fund to current date)</li>
+                <li>Enter your email and PAN</li>
+                <li>Download the password-protected PDF sent to your email</li>
+            </ol>
+        </div>
+        <br>
+        <div style="background-color: #d4edda; padding: 2rem; border-radius: 1rem; margin: 2rem 0;">
+            <h3>🚀 Using the App:</h3>
+            <ol style="text-align: left; max-width: 600px; margin: 0 auto; line-height: 1.8;">
+                <li>Upload your CAS PDF using the sidebar</li>
                 <li>Enter the PDF password</li>
-                <li>Explore different tabs for analysis</li>
+                <li>Explore different tabs for portfolio analysis</li>
                 <li>Use Multi-Fund Strategy tab for balanced tax harvesting</li>
             </ol>
         </div>
