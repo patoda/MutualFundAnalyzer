@@ -49,7 +49,7 @@ def generate_upi_qr(upi_id, amount=None):
     return img_base64
 
 def show_donation_banner():
-    """Display donation banner with QR code"""
+    """Display donation banner with QR code and UPI deep link"""
     upi_id = "ankitpatodiya@okicici"
     
     st.markdown("---")
@@ -71,6 +71,21 @@ def show_donation_banner():
             </p>
         </div>
         """.format(upi_id=upi_id), unsafe_allow_html=True)
+        
+        # UPI deep link button for mobile users
+        st.markdown(f"""
+        <div style="text-align: center; margin-top: 1rem;">
+            <a href="upi://pay?pa={upi_id}&pn=Portfolio Analyzer&cu=INR" 
+               style="display: inline-block; background-color: #4CAF50; color: white; 
+                      padding: 0.8rem 2rem; text-decoration: none; border-radius: 0.5rem; 
+                      font-weight: bold; font-size: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                📱 Pay via UPI App
+            </a>
+            <p style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
+                Tap to open GPay/PhonePe/Paytm (Mobile only)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
         # Generate and display QR code
