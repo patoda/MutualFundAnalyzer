@@ -132,7 +132,3 @@ git push heroku main
 ## Support
 
 If you find this tool useful, consider supporting the developer via UPI: `ankitpatodiya@okicici`
-
-## License
-
-MIT License
