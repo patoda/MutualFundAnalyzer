@@ -106,13 +106,25 @@ git push heroku main
 
 ## Usage
 
-1. Upload your CAS (Consolidated Account Statement) PDF
+### Getting Your CAS Statement
+
+1. **Download your CAS PDF:**
+   - Visit [CAMS Online](https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement)
+   - Choose **"Detailed"** statement type
+   - Select **"Specific Period"**
+   - Choose a period covering your **entire mutual fund journey** (from when you bought your first mutual fund to current date)
+   - Enter your email and PAN
+   - Download the password-protected PDF sent to your email
+
+### Using the App
+
+1. Upload your downloaded CAS (Consolidated Account Statement) PDF
 2. Enter your PDF password
 3. Navigate through different tabs to:
-   - View portfolio overview
-   - Analyze individual holdings
-   - Calculate tax harvesting strategies
-   - Plan multi-fund distributions
+   - View portfolio overview with XIRR calculations
+   - Analyze individual holdings with LT/ST breakdown
+   - Calculate optimal tax harvesting strategies
+   - Plan balanced multi-fund distributions
 
 ## Technologies Used
 
