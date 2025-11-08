@@ -587,56 +587,82 @@ st.markdown("""
         font-size: 10px !important;
         padding: 2px 4px !important;
     }
+    
+    /* Spinner styling - colorful spinner and visible text */
+    div[data-testid="stSpinner"] > div {
+        border-top-color: #1f77b4 !important;
+        border-right-color: #ff7f0e !important;
+        border-bottom-color: #2ca02c !important;
+        border-left-color: #d62728 !important;
+    }
+    div[data-testid="stSpinner"] p {
+        color: #1f77b4 !important;
+        font-weight: 600 !important;
+        font-size: 1.1rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # App title
 st.markdown('<div class="main-header">💼 Portfolio Analyzer</div>', unsafe_allow_html=True)
 
-# Initialize session state for active tab if not exists
+# Initialize session state
+if 'show_landing' not in st.session_state:
+    st.session_state.show_landing = True  # Start on landing page
 if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = 0
-
-# Ensure nav_radio matches active_tab when active_tab is changed programmatically
-# This prevents the radio button from showing the wrong selection
-if 'nav_radio' in st.session_state and st.session_state.nav_radio != st.session_state.active_tab:
-    # active_tab was changed programmatically, sync nav_radio
-    st.session_state.nav_radio = st.session_state.active_tab
-
-# Initialize session state for processed data
+    st.session_state.active_tab = 0  # Portfolio Overview will be index 0 when radio buttons appear
 if 'processed_data' not in st.session_state:
     st.session_state.processed_data = None
 if 'ltcg_budget' not in st.session_state:
     st.session_state.ltcg_budget = 100000
-
-# Initialize file tracking
 if 'last_uploaded_file_id' not in st.session_state:
     st.session_state.last_uploaded_file_id = None
 
-# Tab names - Landing page is first
-tab_names = ["🏠 Landing Page", "📊 Portfolio Overview", "📋 All Holdings", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
+# Home button callback
+def go_home():
+    st.session_state.show_landing = True
+    st.session_state.active_tab = 0
 
-# Callback to update active tab when user clicks
+# Tab change callback
 def on_tab_change():
     st.session_state.active_tab = st.session_state.nav_radio
+    st.session_state.show_landing = False
 
-# Radio button for navigation with callback
-selected_tab = st.radio(
-    "Navigation",
-    range(len(tab_names)),
-    format_func=lambda x: tab_names[x],
-    index=st.session_state.active_tab,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="nav_radio",
-    on_change=on_tab_change
-)
+# Home button at the top - always visible
+if st.button("🏠 Home", key="home_btn", help="Return to landing page to upload new file"):
+    go_home()
+    st.rerun()
 
-# Use session state value for rendering (this is the source of truth)
-active_tab = st.session_state.active_tab
+st.markdown("---")
 
-# LANDING PAGE TAB
-if active_tab == 0:
+# Tab names - no longer includes Landing Page
+tab_names = ["📊 Portfolio Overview", "📋 All Holdings", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
+
+# Show radio buttons only when NOT on landing page AND data is processed
+if not st.session_state.show_landing and st.session_state.processed_data is not None:
+    # Ensure nav_radio matches active_tab when active_tab is changed programmatically
+    if 'nav_radio' in st.session_state and st.session_state.nav_radio != st.session_state.active_tab:
+        st.session_state.nav_radio = st.session_state.active_tab
+    
+    # Radio button for navigation
+    selected_tab = st.radio(
+        "Navigation",
+        range(len(tab_names)),
+        format_func=lambda x: tab_names[x],
+        index=st.session_state.active_tab,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="nav_radio",
+        on_change=on_tab_change
+    )
+    
+    active_tab = st.session_state.active_tab
+else:
+    # On landing page or no data - force landing view
+    active_tab = None
+
+# LANDING PAGE
+if active_tab is None:
     st.header("📁 Upload Your CAS Statement")
     
     col1, col2 = st.columns([2, 1])
@@ -695,10 +721,11 @@ if active_tab == 0:
                     # Show success
                     st.success(f"✅ **Success!** Loaded {len(data['transactions_df'])} transactions, {data['lots_df']['scheme'].nunique()} schemes, {len(data['lots_df'])} lots")
                     
-                    # Switch to Portfolio Overview tab (index 1)
-                    st.session_state.active_tab = 1
+                    # Switch to Portfolio Overview and hide landing page
+                    st.session_state.show_landing = False
+                    st.session_state.active_tab = 0  # Portfolio Overview is now index 0
                     
-                    # Rerun to switch tabs
+                    # Rerun to show radio buttons and portfolio
                     st.rerun()
                     
             except Exception as e:
@@ -746,29 +773,12 @@ if active_tab == 0:
     # Show appropriate content on landing page
     if st.session_state.processed_data is not None and not process_clicked:
         # Data has been processed and we're back on landing page
-        st.success("✅ **Portfolio data loaded!** Navigate to other tabs to view analysis.")
+        st.success("✅ **Portfolio data loaded!**")
         
         data = st.session_state.processed_data
         st.info(f"📊 Loaded: {len(data['transactions_df'])} transactions | {data['lots_df']['scheme'].nunique()} schemes | {len(data['lots_df'])} lots")
         
-        st.markdown("**Ready to explore:**")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            if st.button("📊 Portfolio Overview", use_container_width=True, type="primary"):
-                st.session_state.active_tab = 1
-                st.rerun()
-        with col2:
-            if st.button("📋 All Holdings", use_container_width=True):
-                st.session_state.active_tab = 2
-                st.rerun()
-        with col3:
-            if st.button("💰 Tax Harvest", use_container_width=True):
-                st.session_state.active_tab = 3
-                st.rerun()
-        with col4:
-            if st.button("🎯 Multi-Fund", use_container_width=True):
-                st.session_state.active_tab = 4
-                st.rerun()
+        st.write("📌 **Use the navigation tabs above to explore your portfolio, or upload a new file to replace current data.**")
         
         # Show donation banner at bottom
         show_donation_banner()
@@ -805,7 +815,7 @@ if active_tab == 0:
         show_donation_banner()
 
 # OTHER TABS - Use data from session state
-elif active_tab > 0:
+elif active_tab is not None:
     # Check if data is available
     if st.session_state.processed_data is None:
         st.warning("⚠️ No portfolio data loaded. Please go to the Landing Page to upload your CAS PDF.")
@@ -820,15 +830,15 @@ elif active_tab > 0:
         nav_dict = data['nav_dict']
         ltcg_budget = st.session_state.ltcg_budget
         
-        # Show quick info bar at top
-        st.info(f"📊 Loaded: {len(transactions_df)} transactions | {lots_df['scheme'].nunique()} schemes | {len(lots_df)} lots | LTCG Budget: ₹{format_indian_number(ltcg_budget)}")
-        
         st.markdown("---")
         
         # Display content based on selected tab
-        if active_tab == 1:
-            # TAB 1: Portfolio Overview
+        if active_tab == 0:
+            # Portfolio Overview
             st.header("Portfolio Overview")
+            
+            # Show quick info bar at top - only on Portfolio Overview tab
+            st.info(f"📊 Loaded: {len(transactions_df)} transactions | {lots_df['scheme'].nunique()} schemes | {len(lots_df)} lots")
             
             # Calculate summary metrics
             total_invested = lots_df['invested'].sum()
@@ -972,8 +982,8 @@ elif active_tab > 0:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif active_tab == 2:
-            # TAB 2: All Holdings
+        elif active_tab == 1:
+            # All Holdings
             st.header("All Holdings")
             
             # Initialize session state for this filter
@@ -1229,35 +1239,25 @@ elif active_tab > 0:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif active_tab == 3:
-            # TAB 3: Single-Scheme Tax Harvest
+        elif active_tab == 2:
+            # Single-Scheme Tax Harvest
             st.header("Single-Scheme Tax Harvesting")
             
-            # LTCG Budget Setting
-            st.subheader("⚙️ LTCG Budget")
-            col1, col2 = st.columns([3, 1])
+            # LTCG Budget Setting - Compact
+            col1, col2 = st.columns([2, 2])
             with col1:
                 ltcg_budget_input = st.number_input(
-                    "**LTCG Budget (₹)**",
+                    "**LTCG Target (₹)** — Max long-term profit to harvest per scheme",
                     min_value=5000,
                     max_value=500000,
                     value=st.session_state.ltcg_budget,
                     step=5000,
-                    help="Total Long-Term Capital Gains budget for tax harvesting per scheme",
                     key="ltcg_input_single"
                 )
-                # Update session state
                 st.session_state.ltcg_budget = ltcg_budget_input
                 ltcg_budget = ltcg_budget_input
-            with col2:
-                st.write("")  # Spacer
-                st.write("")  # Spacer
-            
-            st.info("💡 **What is LTCG Budget?** This is the maximum long-term profit you want to realize by selling units. The tool will show which units to sell to achieve this target profit.")
             
             st.markdown("---")
-            
-            st.info(f"Each scheme shows units to sell for ₹{format_indian_number(ltcg_budget)} LTCG (individual scheme basis)")
             
             # Get equity schemes with LT holdings
             equity_lt_schemes = lots_df[(lots_df['fund_type'] == 'equity') & (lots_df['is_lt'])].groupby('scheme').agg({
@@ -1511,41 +1511,23 @@ elif active_tab > 0:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif active_tab == 4:
-            # TAB 4: Multi-Fund Strategy
+        elif active_tab == 3:
+            # Multi-Fund Strategy
             st.header("🎯 Multi-Fund Balanced Tax Harvesting Strategy")
             
-            # LTCG Budget Setting
-            st.subheader("⚙️ LTCG Budget")
-            col1, col2 = st.columns([3, 1])
+            # LTCG Budget Setting - Compact
+            col1, col2 = st.columns([2, 2])
             with col1:
                 ltcg_budget_input = st.number_input(
-                    "**LTCG Budget (₹)**",
+                    "**LTCG Target (₹)** — Total profit to harvest across all selected funds",
                     min_value=5000,
                     max_value=500000,
                     value=st.session_state.ltcg_budget,
                     step=5000,
-                    help="Total Long-Term Capital Gains budget for tax harvesting across all selected funds",
                     key="ltcg_input_multi"
                 )
-                # Update session state
                 st.session_state.ltcg_budget = ltcg_budget_input
                 ltcg_budget = ltcg_budget_input
-            with col2:
-                st.write("")  # Spacer
-                st.write("")  # Spacer
-            
-            st.info("💡 **What is LTCG Budget?** This is the maximum long-term profit you want to realize by selling units across all selected funds. The strategy will distribute this target profit among the funds based on your chosen distribution method.")
-            
-            st.markdown("---")
-            
-            st.markdown(f"""
-            <div class="metric-card">
-                <h3>Strategy Overview</h3>
-                <p>Select multiple funds and choose a distribution strategy to harvest <b>₹{format_indian_number(ltcg_budget)}</b> LTCG 
-                across selected funds.</p>
-            </div>
-            """, unsafe_allow_html=True)
             
             st.markdown("---")
             
