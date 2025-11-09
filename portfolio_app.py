@@ -19,6 +19,8 @@ import base64
 import tempfile
 import os
 import time
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Set page config
 st.set_page_config(
@@ -248,22 +250,47 @@ def parse_pdf_cas(pdf_path, password):
         # Extract all transactions AND current NAVs from closing balance lines
         transactions = []
         current_navs = {}  # Store current NAV per scheme
+        scheme_isins = {}  # Store ISIN per scheme
         current_folio = None
         current_scheme = None
+        current_isin = None
+        last_isin_found = None  # Track the most recently found ISIN in folio
+        pending_isin_prefix = None  # Handle ISINs split across lines
         
         for page in pdf.pages:
             text = page.extract_text()
+            lines = text.split('\n')
             
-            for line in text.split('\n'):
+            for i, line in enumerate(lines):
+                # Check if previous line had "ISIN: INF..." and this line might have the rest
+                if pending_isin_prefix:
+                    # Calculate how many characters we need (total 12 - prefix length)
+                    needed = 12 - len(pending_isin_prefix)
+                    # Try to extract the suffix (remaining chars at start of line)
+                    suffix_match = re.match(rf'^([A-Z0-9]{{{needed}}})', line)
+                    if suffix_match:
+                        isin_suffix = suffix_match.group(1)
+                        full_isin = pending_isin_prefix + isin_suffix
+                        if len(full_isin) == 12:  # Valid ISIN length
+                            current_isin = full_isin
+                            last_isin_found = full_isin
+                            if current_scheme:
+                                scheme_isins[current_scheme] = full_isin
+                    pending_isin_prefix = None
+                    continue
+                
                 # Folio header
                 folio_match = re.search(r'Folio No:\s*(\S+)', line)
                 if folio_match:
                     current_folio = folio_match.group(1)
                     current_scheme = None
+                    current_isin = None
+                    last_isin_found = None
+                    pending_isin_prefix = None
                     continue
                 
                 # Scheme name - more flexible pattern to catch various formats
-                if current_folio and not current_scheme:
+                if current_folio:
                     # Try primary pattern (with prefix like HGFGT-)
                     # Match until we see "Registrar" or "(Non-Demat)" or "ISIN"
                     scheme_match = re.search(r'^[A-Z0-9]+-(.+?)\s+(?:Registrar|ISIN)', line)
@@ -273,7 +300,38 @@ def parse_pdf_cas(pdf_path, password):
                     
                     if scheme_match:
                         current_scheme = scheme_match.group(1).strip()
+                        
+                        # Check if ISIN is on the same line (complete)
+                        isin_match = re.search(r'ISIN:\s*([A-Z]{2}[A-Z0-9]{10})', line)
+                        if isin_match:
+                            current_isin = isin_match.group(1)
+                            last_isin_found = current_isin
+                            scheme_isins[current_scheme] = current_isin
+                        # Check for partial ISIN (e.g., "ISIN: INF917K Registrar" with rest on next line)
+                        # Capture 2-11 characters before "Registrar" or end of line
+                        elif 'ISIN:' in line:
+                            partial_match = re.search(r'ISIN:\s*([A-Z0-9]{2,11})(?:\s+(?:Registrar|$))', line)
+                            if partial_match:
+                                pending_isin_prefix = partial_match.group(1)
+                        # If no ISIN on scheme line but we found one recently, use it
+                        elif last_isin_found and current_scheme not in scheme_isins:
+                            scheme_isins[current_scheme] = last_isin_found
                         continue
+                
+                # Extract ISIN - can appear anywhere after scheme name
+                if current_folio and current_scheme:
+                    isin_match = re.search(r'ISIN:\s*([A-Z]{2}[A-Z0-9]{10})', line)
+                    if isin_match:
+                        current_isin = isin_match.group(1)
+                        last_isin_found = current_isin
+                        # Update the current scheme's ISIN (handles multiple instances)
+                        scheme_isins[current_scheme] = current_isin
+                        continue
+                    
+                    # Check for partial ISIN before "Registrar" or at end of line
+                    partial_match = re.search(r'ISIN:\s*([A-Z0-9]{2,11})(?:\s+(?:Registrar|$))', line)
+                    if partial_match:
+                        pending_isin_prefix = partial_match.group(1)
                 
                 # Extract current NAV from Closing Unit Balance line
                 if current_scheme and 'Closing Unit Balance' in line:
@@ -359,7 +417,7 @@ def parse_pdf_cas(pdf_path, password):
                     'balance': balance
                 })
     
-    return pd.DataFrame(transactions), current_navs, investor_name
+    return pd.DataFrame(transactions), current_navs, investor_name, scheme_isins
 
 
 def calculate_fifo_lots(transactions_df):
@@ -609,7 +667,7 @@ def process_pdf(pdf_bytes, password):
         
         try:
             # Parse PDF - now returns transactions, current NAVs, and investor name
-            transactions_df, current_navs, investor_name = parse_pdf_cas(pdf_path, password)
+            transactions_df, current_navs, investor_name, scheme_isins = parse_pdf_cas(pdf_path, password)
             
             if len(transactions_df) == 0:
                 return None
@@ -672,8 +730,125 @@ def process_pdf(pdf_bytes, password):
         'lots_df': lots_df,
         'transactions_df': transactions_df,
         'nav_dict': nav_dict,
-        'investor_name': investor_name
+        'investor_name': investor_name,
+        'scheme_isins': scheme_isins
     }
+
+# ===================== MFAPI FUNCTIONS FOR ADVANCED INSIGHTS =====================
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_all_mf_schemes():
+    """Fetch complete list of mutual fund schemes from MFAPI."""
+    try:
+        response = requests.get('https://api.mfapi.in/mf', timeout=15)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        pass
+    return []
+
+def find_scheme_code_by_isin(isin, scheme_name):
+    """Find MFAPI scheme code by ISIN or scheme name matching."""
+    all_schemes = get_all_mf_schemes()
+    if not all_schemes:
+        return None
+    
+    # Try to match by scheme name (normalize for better matching)
+    search_name = scheme_name.lower()
+    search_name = re.sub(r'\s+', ' ', search_name)
+    search_name = re.sub(r'[^\w\s]', '', search_name)
+    
+    best_match = None
+    best_score = 0
+    
+    for scheme in all_schemes:
+        candidate = scheme['schemeName'].lower()
+        candidate = re.sub(r'\s+', ' ', candidate)
+        candidate = re.sub(r'[^\w\s]', '', candidate)
+        
+        # Simple word matching score
+        search_words = set(search_name.split())
+        candidate_words = set(candidate.split())
+        common_words = search_words & candidate_words
+        
+        if len(common_words) > 0:
+            score = len(common_words) / max(len(search_words), len(candidate_words))
+            if score > best_score:
+                best_score = score
+                best_match = scheme['schemeCode']
+    
+    return best_match if best_score > 0.5 else None
+
+@st.cache_data(ttl=3600)
+def get_nav_history(scheme_code):
+    """Fetch NAV history for a scheme code."""
+    try:
+        response = requests.get(f'https://api.mfapi.in/mf/{scheme_code}', timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            # Convert to DataFrame
+            nav_df = pd.DataFrame(data['data'])
+            nav_df['date'] = pd.to_datetime(nav_df['date'], format='%d-%m-%Y')
+            nav_df['nav'] = nav_df['nav'].astype(float)
+            nav_df = nav_df.sort_values('date')
+            return nav_df
+    except:
+        pass
+    return None
+
+def fetch_scheme_nav(scheme, isin):
+    """Fetch NAV history for a single scheme."""
+    scheme_code = find_scheme_code_by_isin(isin, scheme)
+    if scheme_code:
+        nav_df = get_nav_history(scheme_code)
+        if nav_df is not None and len(nav_df) > 0:
+            return scheme, nav_df
+    return scheme, None
+
+def fetch_all_nav_histories(schemes, scheme_isins):
+    """Fetch NAV histories for all schemes in parallel."""
+    nav_histories = {}
+    
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all tasks
+        futures = {}
+        for scheme in schemes:
+            isin = scheme_isins.get(scheme)
+            if isin:
+                future = executor.submit(fetch_scheme_nav, scheme, isin)
+                futures[future] = scheme
+        
+        # Collect results as they complete
+        for future in as_completed(futures):
+            scheme, nav_df = future.result()
+            if nav_df is not None:
+                nav_histories[scheme] = nav_df
+    
+    return nav_histories
+
+def calculate_returns(nav_df, periods_days):
+    """Calculate returns for different time periods."""
+    if nav_df is None or len(nav_df) == 0:
+        return {}
+    
+    latest_date = nav_df['date'].max()
+    latest_nav = nav_df[nav_df['date'] == latest_date]['nav'].values[0]
+    
+    returns = {}
+    
+    for period_name, days in periods_days.items():
+        start_date = latest_date - pd.Timedelta(days=days)
+        # Find NAV closest to start date
+        past_data = nav_df[nav_df['date'] <= start_date]
+        
+        if len(past_data) > 0:
+            past_nav = past_data.iloc[-1]['nav']
+            period_return = ((latest_nav - past_nav) / past_nav) * 100
+            returns[period_name] = period_return
+        else:
+            returns[period_name] = None
+    
+    return returns
 
 # ===================== END CORE FUNCTIONS =====================
 
@@ -993,6 +1168,8 @@ if active_tab is None:
                 if st.session_state.last_uploaded_file_id != current_file_id:
                     # Different file uploaded - clear old data AND cache
                     st.session_state.processed_data = None
+                    st.session_state.nav_histories = None  # Clear NAV cache
+                    st.session_state.nav_cache_key = None  # Clear cache key
                     st.cache_data.clear()  # Clear Streamlit's cache
                     st.session_state.last_uploaded_file_id = current_file_id
                     st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
@@ -1467,8 +1644,12 @@ elif active_tab is not None:
                     fund_type = scheme_lots.iloc[0]['fund_type'].upper()
                     current_nav = scheme_lots.iloc[0]['current_nav']
                     
+                    # Get ISIN for this scheme
+                    scheme_isins = data.get('scheme_isins', {})
+                    scheme_isin = scheme_isins.get(selected_scheme, 'Not Available')
+                    
                     st.markdown(f"### {selected_scheme}")
-                    st.markdown(f"**Fund Type:** {fund_type} | **Current NAV:** ₹{current_nav:.2f}")
+                    st.markdown(f"**Fund Type:** {fund_type} | **Current NAV:** ₹{current_nav:.2f} | **ISIN:** `{scheme_isin}`")
                     
                     st.markdown("---")
                     
@@ -1642,7 +1823,7 @@ elif active_tab is not None:
                 st.info("💡 This tab shows capital gains from mutual fund redemptions (sell transactions) in the current FY using FIFO method.")
             else:
                 # ========== SUMMARY TABLE ==========
-                st.subheader("📊 Summary by Scheme")
+                st.subheader("📊 Realized Gains Summary")
                 
                 # Calculate totals
                 total_ltcg = realized_summary_df['ltcg'].sum()
@@ -1680,10 +1861,12 @@ elif active_tab is not None:
                 
                 # Format with color coding for gains/losses
                 def format_gain_with_color(val):
-                    if val >= 0:
+                    if val > 0:
                         return f'<span style="color: green;">₹{format_indian_number(val)}</span>'
-                    else:
+                    elif val < 0:
                         return f'<span style="color: red;">-₹{format_indian_number(abs(val))}</span>'
+                    else:
+                        return f'₹{format_indian_number(val)}'
                 
                 display_summary['LTCG'] = display_summary['ltcg'].apply(lambda x: format_gain_with_color(x))
                 display_summary['STCG'] = display_summary['stcg'].apply(lambda x: format_gain_with_color(x))
@@ -1698,7 +1881,7 @@ elif active_tab is not None:
                 st.markdown("---")
                 
                 # ========== DETAILED VIEW ==========
-                st.subheader("🔎 Detailed Transaction View")
+                st.subheader("🔎 Detailed Transaction View by Scheme")
                 
                 # Filter dropdown - only show schemes with non-zero gains
                 schemes_with_gains = realized_summary_df['scheme'].tolist()
@@ -1733,10 +1916,25 @@ elif active_tab is not None:
                     stcg_display = f"₹{format_indian_number(scheme_stcg)}" if scheme_stcg >= 0 else f"-₹{format_indian_number(abs(scheme_stcg))}"
                     total_display = f"₹{format_indian_number(scheme_total)}" if scheme_total >= 0 else f"-₹{format_indian_number(abs(scheme_total))}"
                     
-                    col1.metric("LTCG", ltcg_display)
-                    col2.metric("STCG", stcg_display)
-                    col3.metric("Total", total_display)
-                    col4.metric("Fund Type", fund_type)
+                    # Color-coded metrics
+                    with col1:
+                        st.markdown("**LTCG**")
+                        ltcg_color = "green" if scheme_ltcg > 0 else ("red" if scheme_ltcg < 0 else "inherit")
+                        st.markdown(f"<h3 style='color: {ltcg_color}; margin-top: 0;'>{ltcg_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("**STCG**")
+                        stcg_color = "green" if scheme_stcg > 0 else ("red" if scheme_stcg < 0 else "inherit")
+                        st.markdown(f"<h3 style='color: {stcg_color}; margin-top: 0;'>{stcg_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col3:
+                        st.markdown("**Total**")
+                        total_color = "green" if scheme_total > 0 else ("red" if scheme_total < 0 else "inherit")
+                        st.markdown(f"<h3 style='color: {total_color}; margin-top: 0;'>{total_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col4:
+                        st.markdown("**Fund Type**")
+                        st.markdown(f"<h3 style='margin-top: 0;'>{fund_type}</h3>", unsafe_allow_html=True)
                     
                     st.markdown("---")
                     
@@ -1764,6 +1962,15 @@ elif active_tab is not None:
                                 if len(lt_lots) > 0:
                                     lot_data = []
                                     for lot in lt_lots:
+                                        # Format gain with color
+                                        gain_val = lot['gain']
+                                        if gain_val > 0:
+                                            gain_display = f"<span style='color: green;'>{format_indian_rupee_compact(gain_val)}</span>"
+                                        elif gain_val < 0:
+                                            gain_display = f"<span style='color: red;'>{format_indian_rupee_compact(gain_val)}</span>"
+                                        else:
+                                            gain_display = format_indian_rupee_compact(gain_val)
+                                        
                                         lot_data.append({
                                             'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
                                             'Units': f"{lot['units']:.2f}",
@@ -1771,12 +1978,12 @@ elif active_tab is not None:
                                             'Sell Price': f"₹{txn['sell_price']:.2f}",
                                             'Invested': format_indian_rupee_compact(lot['invested']),
                                             'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
-                                            'Gain': format_indian_rupee_compact(lot['gain']),
+                                            'Gain': gain_display,
                                             'Holding': f"{lot['holding_days']} days"
                                         })
                                     
                                     lot_df = pd.DataFrame(lot_data)
-                                    st.dataframe(lot_df, use_container_width=True, hide_index=True)
+                                    st.markdown(lot_df.to_html(escape=False, index=False), unsafe_allow_html=True)
                     else:
                         st.markdown("#### 📗 Long Term Capital Gains (LTCG)")
                         st.info("No long-term redemptions for this scheme in current FY")
@@ -1803,6 +2010,15 @@ elif active_tab is not None:
                                 if len(st_lots) > 0:
                                     lot_data = []
                                     for lot in st_lots:
+                                        # Format gain with color
+                                        gain_val = lot['gain']
+                                        if gain_val > 0:
+                                            gain_display = f"<span style='color: green;'>{format_indian_rupee_compact(gain_val)}</span>"
+                                        elif gain_val < 0:
+                                            gain_display = f"<span style='color: red;'>{format_indian_rupee_compact(gain_val)}</span>"
+                                        else:
+                                            gain_display = format_indian_rupee_compact(gain_val)
+                                        
                                         lot_data.append({
                                             'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
                                             'Units': f"{lot['units']:.2f}",
@@ -1810,12 +2026,12 @@ elif active_tab is not None:
                                             'Sell Price': f"₹{txn['sell_price']:.2f}",
                                             'Invested': format_indian_rupee_compact(lot['invested']),
                                             'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
-                                            'Gain': format_indian_rupee_compact(lot['gain']),
+                                            'Gain': gain_display,
                                             'Holding': f"{lot['holding_days']} days"
                                         })
                                     
                                     lot_df = pd.DataFrame(lot_data)
-                                    st.dataframe(lot_df, use_container_width=True, hide_index=True)
+                                    st.markdown(lot_df.to_html(escape=False, index=False), unsafe_allow_html=True)
                     else:
                         st.markdown("#### 📕 Short Term Capital Gains (STCG)")
                         st.info("No short-term redemptions for this scheme in current FY")
@@ -2612,6 +2828,7 @@ elif active_tab is not None:
                     hovertemplate='<b>%{y}</b><br>Units: %{customdata[0]}<br>Redemption: %{customdata[1]}<br>LTCG: %{customdata[2]}<extra></extra>'
                 )
                 st.plotly_chart(fig, use_container_width=True)
+            
             
             else:
                 st.warning("👆 Please select at least one fund to see the balanced strategy")
