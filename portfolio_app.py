@@ -1825,8 +1825,14 @@ elif active_tab is not None:
                             }])
                             lots_sell_with_total = pd.concat([lots_sell_df, summary_row], ignore_index=True)
                             
+                            # Style the TOTAL row
+                            def highlight_total(row):
+                                if row['Purchase Date'] == 'TOTAL':
+                                    return ['background-color: #e8f4f8; font-weight: bold'] * len(row)
+                                return [''] * len(row)
+                            
                             st.dataframe(
-                                lots_sell_with_total,
+                                lots_sell_with_total.style.apply(highlight_total, axis=1),
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
@@ -2300,8 +2306,14 @@ elif active_tab is not None:
                             }])
                             lots_with_total = pd.concat([lots_display_df, summary_row], ignore_index=True)
                             
+                            # Style the TOTAL row
+                            def highlight_total(row):
+                                if row['Purchase Date'] == 'TOTAL':
+                                    return ['background-color: #e8f4f8; font-weight: bold'] * len(row)
+                                return [''] * len(row)
+                            
                             st.dataframe(
-                                lots_with_total,
+                                lots_with_total.style.apply(highlight_total, axis=1),
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
