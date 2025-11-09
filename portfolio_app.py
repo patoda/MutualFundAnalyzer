@@ -227,9 +227,14 @@ def parse_pdf_cas(pdf_path, password):
                     current_scheme = None
                     continue
                 
-                # Scheme name
+                # Scheme name - more flexible pattern to catch various formats
                 if current_folio and not current_scheme:
-                    scheme_match = re.search(r'^[A-Z0-9]+-(.+?)(?:\s*\(Non-Demat\)|\s*\(Demat\)|\s*-\s*Registrar|\s*-\s*ISIN)', line)
+                    # Try primary pattern (with prefix like HGFGT-)
+                    scheme_match = re.search(r'^\s*[A-Z0-9]+-(.+?)(?:\s*\(Non-Demat\)|\s*\(Demat\)|\s*-\s*Registrar|\s*-\s*ISIN)', line)
+                    if not scheme_match:
+                        # Try alternative pattern (without prefix, just scheme name)
+                        scheme_match = re.search(r'^\s*([A-Z][A-Za-z0-9\s&\-\(\)]+?)(?:\s*\(Non-Demat\)|\s*\(Demat\)|\s*-\s*Registrar|\s*-\s*ISIN)', line)
+                    
                     if scheme_match:
                         current_scheme = scheme_match.group(1).strip()
                         continue
@@ -791,10 +796,11 @@ if active_tab is None:
             # Check if this is a different file than before
             if 'last_uploaded_file_id' in st.session_state:
                 if st.session_state.last_uploaded_file_id != current_file_id:
-                    # Different file uploaded - clear old data
+                    # Different file uploaded - clear old data AND cache
                     st.session_state.processed_data = None
+                    st.cache_data.clear()  # Clear Streamlit's cache
                     st.session_state.last_uploaded_file_id = current_file_id
-                    st.info(f"📎 New file detected: **{uploaded_pdf.name}**")
+                    st.info(f"📎 New file detected: **{uploaded_pdf.name}** (cache cleared)")
             else:
                 # First file upload
                 st.session_state.last_uploaded_file_id = current_file_id
@@ -809,6 +815,9 @@ if active_tab is None:
     
     # Process PDF when button is clicked - RIGHT BELOW THE BUTTON
     if process_clicked and uploaded_pdf:
+        # Clear cache before processing to ensure fresh data
+        st.cache_data.clear()
+        
         with st.spinner('🔄 Processing PDF CAS... This may take a minute...'):
             # Reset file pointer to beginning
             uploaded_pdf.seek(0)
