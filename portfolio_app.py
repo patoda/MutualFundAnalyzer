@@ -1359,11 +1359,6 @@ elif active_tab is not None:
                                     "Days": st.column_config.NumberColumn("Days", format="%.0f")
                                 }
                             )
-                            
-                            st.dataframe(
-                                st_display_df,
-                                hide_index=True
-                            )
             
             # Show donation banner at bottom
             show_donation_banner()
