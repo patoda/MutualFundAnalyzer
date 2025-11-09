@@ -940,47 +940,6 @@ else:
 
 # LANDING PAGE
 if active_tab is None:
-    # Feature highlights in three columns
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div style="background: rgba(102, 126, 234, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
-                    border: 1px solid rgba(102, 126, 234, 0.2); height: 100%;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📊</div>
-            <h4 style="margin: 0 0 0.5rem 0;">Portfolio Analytics</h4>
-            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
-                Comprehensive view of holdings, gains, XIRR, and LTCG/STCG breakdowns
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: rgba(40, 167, 69, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
-                    border: 1px solid rgba(40, 167, 69, 0.2); height: 100%;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💰</div>
-            <h4 style="margin: 0 0 0.5rem 0;">Tax Harvesting</h4>
-            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
-                Optimize LTCG redemptions with FIFO-based lot tracking and multi-fund strategies
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div style="background: rgba(255, 193, 7, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
-                    border: 1px solid rgba(255, 193, 7, 0.2); height: 100%;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔒</div>
-            <h4 style="margin: 0 0 0.5rem 0;">100% Private</h4>
-            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
-                All processing happens locally in your browser. No data stored on servers
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     # Upload section with better styling
     col1, col2 = st.columns([2, 1])
     
