@@ -230,10 +230,11 @@ def parse_pdf_cas(pdf_path, password):
                 # Scheme name - more flexible pattern to catch various formats
                 if current_folio and not current_scheme:
                     # Try primary pattern (with prefix like HGFGT-)
-                    scheme_match = re.search(r'^\s*[A-Z0-9]+-(.+?)(?:\s*\(Non-Demat\)|\s*\(Demat\)|\s*-\s*Registrar|\s*-\s*ISIN)', line)
+                    # Match until we see "Registrar" or "(Non-Demat)" or "ISIN"
+                    scheme_match = re.search(r'^[A-Z0-9]+-(.+?)\s+(?:Registrar|ISIN)', line)
                     if not scheme_match:
-                        # Try alternative pattern (without prefix, just scheme name)
-                        scheme_match = re.search(r'^\s*([A-Z][A-Za-z0-9\s&\-\(\)]+?)(?:\s*\(Non-Demat\)|\s*\(Demat\)|\s*-\s*Registrar|\s*-\s*ISIN)', line)
+                        # Try pattern with (Non-Demat) or (Demat)
+                        scheme_match = re.search(r'^[A-Z0-9]+-(.+?)\s*\((?:Non-)?Demat\)', line)
                     
                     if scheme_match:
                         current_scheme = scheme_match.group(1).strip()
@@ -251,7 +252,8 @@ def parse_pdf_cas(pdf_path, password):
                 if not re.match(r'\d{2}-[A-Za-z]{3}-\d{4}', line):
                     continue
                 
-                if '***' in line or 'To 08-Nov-2025' in line:
+                # Skip stamp duty lines and header lines like "To 09-Nov-2025"
+                if '***' in line or re.search(r'To \d{2}-[A-Za-z]{3}-\d{4}', line):
                     continue
                 
                 # Extract date
