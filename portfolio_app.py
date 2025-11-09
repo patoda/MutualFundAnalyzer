@@ -875,7 +875,7 @@ st.markdown("""
 
 # Enhanced App title with subtitle
 st.markdown('''
-<div style="text-align: center; padding: 1rem 0 2rem 0;">
+<div style="text-align: center; padding: 0.5rem 0 0.5rem 0;">
     <div class="main-header">💼 Portfolio Analyzer</div>
     <p style="font-size: 1.1rem; opacity: 0.7; font-weight: 400; margin-top: -1rem;">
         Professional Mutual Fund Analytics & Tax Harvesting Platform
@@ -1616,26 +1616,23 @@ elif active_tab is not None:
                 # Show aggregate metrics
                 col1, col2, col3, col4 = st.columns(4)
                 
-                # LTCG metric with proper sign and color
+                # LTCG metric with color coding
+                ltcg_color = "green" if total_ltcg > 0 else ("red" if total_ltcg < 0 else "black")
                 ltcg_display = f"₹{format_indian_number(total_ltcg)}" if total_ltcg >= 0 else f"-₹{format_indian_number(abs(total_ltcg))}"
-                col1.metric("Total LTCG", ltcg_display, 
-                           delta="Profit" if total_ltcg >= 0 else "Loss",
-                           delta_color="normal" if total_ltcg >= 0 else "inverse")
+                col1.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total LTCG</div><div style='font-size: 36px; font-weight: 600; color: {ltcg_color};'>{ltcg_display}</div>", unsafe_allow_html=True)
                 
-                # STCG metric with proper sign and color
+                # STCG metric with color coding
+                stcg_color = "green" if total_stcg > 0 else ("red" if total_stcg < 0 else "black")
                 stcg_display = f"₹{format_indian_number(total_stcg)}" if total_stcg >= 0 else f"-₹{format_indian_number(abs(total_stcg))}"
-                col2.metric("Total STCG", stcg_display, 
-                           delta="Profit" if total_stcg >= 0 else "Loss",
-                           delta_color="normal" if total_stcg >= 0 else "inverse")
+                col2.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total STCG</div><div style='font-size: 36px; font-weight: 600; color: {stcg_color};'>{stcg_display}</div>", unsafe_allow_html=True)
                 
-                # Total gain with proper sign
+                # Total gain with color coding
+                total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
                 total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
-                col3.metric("Total Gains", total_display,
-                           delta="Net Profit" if total_gain >= 0 else "Net Loss",
-                           delta_color="normal" if total_gain >= 0 else "inverse")
+                col3.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gains</div><div style='font-size: 36px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
                 
-                col4.metric("Schemes", f"{len(realized_summary_df)}", 
-                           delta=f"{int(total_txns)} txns")
+                # Schemes count
+                col4.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Schemes</div><div style='font-size: 36px; font-weight: 600; color: black;'>{len(realized_summary_df)}</div>", unsafe_allow_html=True)
                 
                 st.markdown("---")
                 
@@ -2105,7 +2102,6 @@ elif active_tab is not None:
             selected_schemes = st.multiselect(
                 "Choose funds to include:",
                 options=equity_lt_schemes['scheme'].tolist(),
-                default=st.session_state.multi_fund_selection if all(s in equity_lt_schemes['scheme'].tolist() for s in st.session_state.multi_fund_selection) else [],
                 key='multi_fund_selection',
                 help="Select 2 or more funds for balanced strategy"
             )
