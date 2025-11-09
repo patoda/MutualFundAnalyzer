@@ -63,7 +63,8 @@ def show_donation_banner():
     with col1:
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1.5rem; border-radius: 1rem; color: white; text-align: center;">
+                    padding: 1.5rem; border-radius: 1rem; color: white; text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
             <h3 style="margin: 0 0 1rem 0; color: white;">☕ Buy me a treat :)</h3>
             <div style="display: inline-block; background-color: rgba(0,0,0,0.2); 
                         padding: 0.5rem 1rem; border-radius: 0.3rem; font-family: monospace; 
@@ -82,7 +83,7 @@ def show_donation_banner():
                       font-weight: bold; font-size: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 📱 Pay via UPI App
             </a>
-            <p style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
+            <p style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.5rem;">
                 Tap to open GPay/PhonePe/Paytm (Mobile only)
             </p>
         </div>
@@ -646,28 +647,29 @@ st.markdown("""
 <style>
     .main-header {
         font-size: 2.5rem;
-        color: #1f77b4;
         font-weight: bold;
         text-align: center;
         padding: 1rem 0;
+        opacity: 0.9;
     }
     .metric-card {
-        background-color: #f0f2f6;
+        background-color: var(--background-color);
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
+        border-left: 4px solid rgba(31, 119, 180, 0.8);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .success-card {
-        background-color: #d4edda;
+        background-color: rgba(40, 167, 69, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #28a745;
+        border-left: 4px solid rgba(40, 167, 69, 0.8);
     }
     .warning-card {
-        background-color: #fff3cd;
+        background-color: rgba(255, 193, 7, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #ffc107;
+        border-left: 4px solid rgba(255, 193, 7, 0.8);
     }
     
     /* Compact metrics */
@@ -1825,10 +1827,10 @@ elif active_tab is not None:
                             }])
                             lots_sell_with_total = pd.concat([lots_sell_df, summary_row], ignore_index=True)
                             
-                            # Style the TOTAL row
+                            # Style the TOTAL row - theme-aware color
                             def highlight_total(row):
                                 if row['Purchase Date'] == 'TOTAL':
-                                    return ['background-color: #e8f4f8; font-weight: bold'] * len(row)
+                                    return ['background-color: rgba(102, 126, 234, 0.15); font-weight: bold'] * len(row)
                                 return [''] * len(row)
                             
                             st.dataframe(
@@ -2306,14 +2308,14 @@ elif active_tab is not None:
                             }])
                             lots_with_total = pd.concat([lots_display_df, summary_row], ignore_index=True)
                             
-                            # Style the TOTAL row
-                            def highlight_total(row):
+                            # Style the TOTAL row - theme-aware color
+                            def highlight_total_multi(row):
                                 if row['Purchase Date'] == 'TOTAL':
-                                    return ['background-color: #e8f4f8; font-weight: bold'] * len(row)
+                                    return ['background-color: rgba(102, 126, 234, 0.15); font-weight: bold'] * len(row)
                                 return [''] * len(row)
                             
                             st.dataframe(
-                                lots_with_total.style.apply(highlight_total, axis=1),
+                                lots_with_total.style.apply(highlight_total_multi, axis=1),
                                 use_container_width=True,
                                 hide_index=True,
                                 column_config={
