@@ -940,17 +940,6 @@ else:
 
 # LANDING PAGE
 if active_tab is None:
-    # Enhanced welcome section with feature cards
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); 
-                padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; text-align: center;">
-        <h2 style="margin: 0 0 1rem 0;">📁 Upload Your CAS Statement</h2>
-        <p style="font-size: 1.1rem; opacity: 0.8; margin: 0;">
-            Get instant insights into your mutual fund portfolio with advanced tax harvesting strategies
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
     # Feature highlights in three columns
     col1, col2, col3 = st.columns(3)
     
@@ -1043,20 +1032,6 @@ if active_tab is None:
                 use_container_width=True,
                 help="Click to parse the CAS PDF and generate portfolio analytics"
             )
-    
-    # How it works section
-    with st.expander("ℹ️ **How to Get Your CAS Statement**", expanded=False):
-        st.markdown("""
-        **Step-by-step guide to download your CAS:**
-        
-        1. **Via Email** - CAMS/Karvy sends CAS monthly to your registered email
-        2. **Online Download:**
-           - Visit [camsonline.com](https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement)  
-           - OR [kfintech.com](https://mfs.kfintech.com/investor/General/ConsolidatedAccountStatement)
-        3. **Via MyCAMS/KFintech App** - Download from mobile apps
-        
-        💡 **Tip:** The password is usually your PAN in lowercase or DOB (DDMMYYYY format)
-        """)
     
     # Process PDF when button is clicked
     if process_clicked and uploaded_pdf:
@@ -1189,18 +1164,25 @@ if active_tab is None:
         
         st.write("This tool helps you analyze your mutual fund portfolio and optimize tax harvesting strategies.")
         
-        st.info("""
-        **How to get your CAS (Consolidated Account Statement):**
-        
-        1. Visit [CAMS website](https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement)
-        2. Enter your email ID registered with mutual funds
-        3. Select "Detailed" statement type
-        4. Choose date range (e.g., Since Inception)
-        5. Select "Password Protected" PDF format
-        6. Submit and check your email
-        7. You'll receive the PDF with password in the email
-        8. Upload that PDF here!
-        """)
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%); 
+                    padding: 1.5rem; border-radius: 0.75rem; border-left: 4px solid rgba(102, 126, 234, 0.6); margin: 1rem 0;">
+            <h4 style="margin: 0 0 1rem 0; color: rgba(102, 126, 234, 1);">📋 How to get your CAS (Consolidated Account Statement):</h4>
+            <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                <li>Visit <a href="https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement" target="_blank" style="color: rgba(102, 126, 234, 1); text-decoration: none; font-weight: 500;">CAMS website</a> to download "CAS - CAMS+KFintech" statement</li>
+                <li>For statement type, select <strong>"Detailed (Includes transaction listing)"</strong></li>
+                <li>For Period, select <strong>"Specific Period"</strong></li>
+                <li>In From Date, select a date far in the past since the inception of your investments</li>
+                <li>In To Date, select latest date (today)</li>
+                <li>In Folio Listing, select <strong>"Transacted folios and folios with balanceinfo"</strong></li>
+                <li>Enter your email ID registered with mutual funds</li>
+                <li>Choose a password for your CAS PDF</li>
+                <li>Submit and check your email</li>
+                <li>You'll receive the PDF with password in the email</li>
+                <li>Upload that PDF here!</li>
+            </ol>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
         
