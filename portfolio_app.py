@@ -1834,9 +1834,9 @@ elif active_tab is not None:
                                     "Units": st.column_config.NumberColumn("Units", format="%.2f"),
                                     "Purchase Price": st.column_config.NumberColumn("Purchase Price", format="%.2f"),
                                     "Current NAV": st.column_config.NumberColumn("Current NAV", format="%.2f"),
-                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.2f"),
-                                    "Value": st.column_config.NumberColumn("Value", format="₹%.2f"),
-                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.2f"),
+                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.0f"),
+                                    "Value": st.column_config.NumberColumn("Value", format="₹%.0f"),
+                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.0f"),
                                     "Type": st.column_config.TextColumn("Type")
                                 }
                             )
@@ -2309,9 +2309,9 @@ elif active_tab is not None:
                                     "Units": st.column_config.NumberColumn("Units", format="%.2f"),
                                     "Purchase Price": st.column_config.NumberColumn("Purchase Price", format="%.2f"),
                                     "Current NAV": st.column_config.NumberColumn("Current NAV", format="%.2f"),
-                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.2f"),
-                                    "Value": st.column_config.NumberColumn("Value", format="₹%.2f"),
-                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.2f"),
+                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.0f"),
+                                    "Value": st.column_config.NumberColumn("Value", format="₹%.0f"),
+                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.0f"),
                                     "Type": st.column_config.TextColumn("Type")
                                 }
                             )
