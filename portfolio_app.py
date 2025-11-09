@@ -22,10 +22,13 @@ import time
 
 # Set page config
 st.set_page_config(
-    page_title="Portfolio Analyzer",
+    page_title="Portfolio Analyzer - Tax Harvesting & Analytics",
     page_icon="💰",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': "Professional Mutual Fund Portfolio Analyzer with Tax Harvesting Strategies"
+    }
 )
 
 # ===================== CORE FUNCTIONS =====================
@@ -642,92 +645,243 @@ def process_pdf(pdf_bytes, password):
 
 # ===================== END CORE FUNCTIONS =====================
 
-# Custom CSS
+# Enhanced Professional CSS
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        text-align: center;
-        padding: 1rem 0;
-        opacity: 0.9;
-    }
-    .metric-card {
-        background-color: var(--background-color);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid rgba(31, 119, 180, 0.8);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .success-card {
-        background-color: rgba(40, 167, 69, 0.1);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid rgba(40, 167, 69, 0.8);
-    }
-    .warning-card {
-        background-color: rgba(255, 193, 7, 0.1);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid rgba(255, 193, 7, 0.8);
+    /* Import Google Fonts for better typography */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Global font */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Compact metrics */
+    /* Main container styling */
+    .main {
+        padding: 0 2rem;
+    }
+    
+    /* Header styling with gradient text */
+    .main-header {
+        font-size: 2.8rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 2rem 0 1rem 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.5px;
+    }
+    
+    /* Enhanced metric cards */
+    .metric-card {
+        background: rgba(31, 119, 180, 0.05);
+        padding: 1.2rem;
+        border-radius: 0.75rem;
+        border-left: 4px solid rgba(31, 119, 180, 0.8);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
+    }
+    
+    .success-card {
+        background: rgba(40, 167, 69, 0.05);
+        padding: 1.2rem;
+        border-radius: 0.75rem;
+        border-left: 4px solid rgba(40, 167, 69, 0.8);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    .success-card:hover {
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.15);
+        transform: translateY(-2px);
+    }
+    
+    .warning-card {
+        background: rgba(255, 193, 7, 0.05);
+        padding: 1.2rem;
+        border-radius: 0.75rem;
+        border-left: 4px solid rgba(255, 193, 7, 0.8);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    .warning-card:hover {
+        box-shadow: 0 4px 12px rgba(255, 193, 7, 0.15);
+        transform: translateY(-2px);
+    }
+    
+    /* Enhanced button styling */
+    .stButton > button {
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    /* Compact but elegant metrics */
     [data-testid="stMetricValue"] {
-        font-size: 1rem !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
         line-height: 1.2 !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.75rem !important;
-        line-height: 1 !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     [data-testid="stMetric"] {
-        padding: 0.3rem 0.5rem !important;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 0.8rem !important;
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        background: rgba(255, 255, 255, 0.06);
     }
     [data-testid="stMetricDelta"] {
-        font-size: 0.7rem !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
     }
     
-    /* Aggressive dataframe styling - force smaller text */
+    /* Professional dataframe styling */
     div[data-testid="stDataFrame"] {
-        font-size: 10px !important;
-    }
-    div[data-testid="stDataFrame"] div {
-        font-size: 10px !important;
+        font-size: 0.85rem !important;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     div[data-testid="stDataFrame"] table {
-        font-size: 10px !important;
+        font-size: 0.85rem !important;
     }
     div[data-testid="stDataFrame"] td,
     div[data-testid="stDataFrame"] th {
-        font-size: 10px !important;
-        padding: 2px 4px !important;
-        white-space: nowrap !important;
+        font-size: 0.85rem !important;
+        padding: 0.5rem 0.75rem !important;
     }
-    /* Target specific cell content */
+    div[data-testid="stDataFrame"] th {
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        font-size: 0.75rem !important;
+        letter-spacing: 0.5px;
+        background: rgba(102, 126, 234, 0.08) !important;
+    }
     [data-testid="stDataFrame"] [role="gridcell"],
     [data-testid="stDataFrame"] [role="columnheader"] {
-        font-size: 10px !important;
-        padding: 2px 4px !important;
+        font-size: 0.85rem !important;
+        padding: 0.5rem 0.75rem !important;
     }
     
-    /* Spinner styling - colorful spinner and visible text */
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: rgba(102, 126, 234, 0.05);
+        padding: 0.5rem;
+        border-radius: 0.75rem;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        border-radius: 0.5rem;
+        background: rgba(102, 126, 234, 0.05);
+        transition: all 0.3s ease;
+    }
+    .streamlit-expanderHeader:hover {
+        background: rgba(102, 126, 234, 0.1);
+    }
+    
+    /* Info/Warning/Success boxes */
+    .stAlert {
+        border-radius: 0.75rem;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    /* Spinner styling */
     div[data-testid="stSpinner"] > div {
-        border-top-color: #1f77b4 !important;
-        border-right-color: #ff7f0e !important;
-        border-bottom-color: #2ca02c !important;
-        border-left-color: #d62728 !important;
+        border-top-color: #667eea !important;
+        border-right-color: #764ba2 !important;
+        border-bottom-color: #667eea !important;
+        border-left-color: #764ba2 !important;
+        border-width: 3px !important;
     }
     div[data-testid="stSpinner"] p {
-        color: #1f77b4 !important;
+        color: #667eea !important;
         font-weight: 600 !important;
         font-size: 1.1rem !important;
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    }
+    
+    /* File uploader */
+    [data-testid="stFileUploader"] {
+        border: 2px dashed rgba(102, 126, 234, 0.3);
+        border-radius: 0.75rem;
+        padding: 1rem;
+        transition: all 0.3s ease;
+    }
+    [data-testid="stFileUploader"]:hover {
+        border-color: rgba(102, 126, 234, 0.6);
+        background: rgba(102, 126, 234, 0.02);
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.05);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(102, 126, 234, 0.3);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(102, 126, 234, 0.5);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# App title
-st.markdown('<div class="main-header">💼 Portfolio Analyzer</div>', unsafe_allow_html=True)
+# Enhanced App title with subtitle
+st.markdown('''
+<div style="text-align: center; padding: 1rem 0 2rem 0;">
+    <div class="main-header">💼 Portfolio Analyzer</div>
+    <p style="font-size: 1.1rem; opacity: 0.7; font-weight: 400; margin-top: -1rem;">
+        Professional Mutual Fund Analytics & Tax Harvesting Platform
+    </p>
+</div>
+''', unsafe_allow_html=True)
 
 # Initialize session state
 if 'show_landing' not in st.session_state:
@@ -786,12 +940,69 @@ else:
 
 # LANDING PAGE
 if active_tab is None:
-    st.header("📁 Upload Your CAS Statement")
+    # Enhanced welcome section with feature cards
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); 
+                padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; text-align: center;">
+        <h2 style="margin: 0 0 1rem 0;">📁 Upload Your CAS Statement</h2>
+        <p style="font-size: 1.1rem; opacity: 0.8; margin: 0;">
+            Get instant insights into your mutual fund portfolio with advanced tax harvesting strategies
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
+    # Feature highlights in three columns
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: rgba(102, 126, 234, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
+                    border: 1px solid rgba(102, 126, 234, 0.2); height: 100%;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📊</div>
+            <h4 style="margin: 0 0 0.5rem 0;">Portfolio Analytics</h4>
+            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
+                Comprehensive view of holdings, gains, XIRR, and LTCG/STCG breakdowns
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: rgba(40, 167, 69, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
+                    border: 1px solid rgba(40, 167, 69, 0.2); height: 100%;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💰</div>
+            <h4 style="margin: 0 0 0.5rem 0;">Tax Harvesting</h4>
+            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
+                Optimize LTCG redemptions with FIFO-based lot tracking and multi-fund strategies
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div style="background: rgba(255, 193, 7, 0.05); padding: 1.5rem; border-radius: 0.75rem; 
+                    border: 1px solid rgba(255, 193, 7, 0.2); height: 100%;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔒</div>
+            <h4 style="margin: 0 0 0.5rem 0;">100% Private</h4>
+            <p style="opacity: 0.7; font-size: 0.9rem; margin: 0;">
+                All processing happens locally in your browser. No data stored on servers
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Upload section with better styling
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        uploaded_pdf = st.file_uploader("**STEP 1: Upload PDF CAS**", type=['pdf'], help="Click 'Browse files' button to select your CAS PDF")
+        st.markdown("### 📤 Step 1: Upload Your CAS PDF")
+        uploaded_pdf = st.file_uploader(
+            "Choose your Consolidated Account Statement (CAS) PDF file", 
+            type=['pdf'], 
+            help="Upload the CAS PDF file you received from CAMS/Karvy via email",
+            label_visibility="collapsed"
+        )
         
         # Track file changes - clear processed data ONLY when a different file is uploaded
         if uploaded_pdf is not None:
@@ -804,58 +1015,121 @@ if active_tab is None:
                     st.session_state.processed_data = None
                     st.cache_data.clear()  # Clear Streamlit's cache
                     st.session_state.last_uploaded_file_id = current_file_id
-                    st.info(f"📎 New file detected: **{uploaded_pdf.name}** (cache cleared)")
+                    st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
             else:
                 # First file upload
                 st.session_state.last_uploaded_file_id = current_file_id
+                st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
         
     with col2:
-        password = st.text_input("**STEP 2: Enter Password**", type="password", help="Enter the password from your email (leave blank if no password)")
+        st.markdown("### 🔐 Step 2: Enter Password")
+        password = st.text_input(
+            "PDF Password (if any)", 
+            type="password", 
+            help="Enter the password from your email. Leave blank if your PDF is not password protected",
+            placeholder="Leave blank if no password",
+            label_visibility="collapsed"
+        )
     
-    # Process button
+    # Process button with enhanced styling
+    st.markdown("<br>", unsafe_allow_html=True)
     process_clicked = False
     if uploaded_pdf:
-        process_clicked = st.button("**STEP 3: Process PDF** 🚀", type="primary", use_container_width=True)
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            process_clicked = st.button(
+                "🚀 Process & Analyze Portfolio", 
+                type="primary", 
+                use_container_width=True,
+                help="Click to parse the CAS PDF and generate portfolio analytics"
+            )
     
-    # Process PDF when button is clicked - RIGHT BELOW THE BUTTON
+    # How it works section
+    with st.expander("ℹ️ **How to Get Your CAS Statement**", expanded=False):
+        st.markdown("""
+        **Step-by-step guide to download your CAS:**
+        
+        1. **Via Email** - CAMS/Karvy sends CAS monthly to your registered email
+        2. **Online Download:**
+           - Visit [camsonline.com](https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement)  
+           - OR [kfintech.com](https://mfs.kfintech.com/investor/General/ConsolidatedAccountStatement)
+        3. **Via MyCAMS/KFintech App** - Download from mobile apps
+        
+        💡 **Tip:** The password is usually your PAN in lowercase or DOB (DDMMYYYY format)
+        """)
+    
+    # Process PDF when button is clicked
     if process_clicked and uploaded_pdf:
         # Clear cache before processing to ensure fresh data
         st.cache_data.clear()
         
-        with st.spinner('🔄 Processing PDF CAS... This may take a minute...'):
-            # Reset file pointer to beginning
-            uploaded_pdf.seek(0)
+        # Enhanced progress indicators
+        progress_text = st.empty()
+        progress_bar = st.progress(0)
+        
+        progress_text.markdown("🔍 **Reading PDF file...**")
+        progress_bar.progress(20)
+        
+        # Reset file pointer to beginning
+        uploaded_pdf.seek(0)
+        
+        # Read file bytes
+        pdf_bytes = uploaded_pdf.read()
+        
+        try:
+            progress_text.markdown("📊 **Extracting transactions...**")
+            progress_bar.progress(40)
             
-            # Read file bytes
-            pdf_bytes = uploaded_pdf.read()
+            # Process PDF - use None if password is empty
+            pdf_password = password if password else None
             
-            try:
-                # Process PDF - use None if password is empty
-                pdf_password = password if password else None
-                data = process_pdf(pdf_bytes, pdf_password)
+            progress_text.markdown("💼 **Calculating FIFO lots...**")
+            progress_bar.progress(60)
+            
+            data = process_pdf(pdf_bytes, pdf_password)
+            
+            progress_text.markdown("✨ **Finalizing analytics...**")
+            progress_bar.progress(80)
+            
+            # Check what we got
+            if data is None:
+                progress_bar.empty()
+                progress_text.empty()
+                st.error("❌ **📄 No valid CAS data found! This doesn't appear to be a valid Consolidated Account Statement. Please ensure you uploaded the correct PDF.**")
+            elif 'lots_df' not in data or len(data['lots_df']) == 0:
+                progress_bar.empty()
+                progress_text.empty()
+                st.error("❌ **📄 No holdings found in CAS! The PDF was processed but no current holdings were found. You may have zero balance in all schemes.**")
+            elif 'transactions_df' not in data or len(data['transactions_df']) == 0:
+                progress_bar.empty()
+                progress_text.empty()
+                st.error("❌ **📄 No transactions found in CAS! The PDF format might not be supported.**")
+            else:
+                progress_bar.progress(100)
+                progress_text.markdown("✅ **Processing complete!**")
+                time.sleep(0.5)
                 
-                # Check what we got
-                if data is None:
-                    st.error("❌ **📄 No valid CAS data found! This doesn't appear to be a valid Consolidated Account Statement. Please ensure you uploaded the correct PDF.**")
-                elif 'lots_df' not in data or len(data['lots_df']) == 0:
-                    st.error("❌ **📄 No holdings found in CAS! The PDF was processed but no current holdings were found. You may have zero balance in all schemes.**")
-                elif 'transactions_df' not in data or len(data['transactions_df']) == 0:
-                    st.error("❌ **📄 No transactions found in CAS! The PDF format might not be supported.**")
-                else:
-                    # Store in session state
-                    st.session_state.processed_data = data
+                # Store in session state
+                st.session_state.processed_data = data
+                
+                # Show success with stats
+                st.success(f"""
+                ✅ **Portfolio Loaded Successfully!**
+                - 📈 **{len(data['transactions_df'])}** transactions processed
+                - 🏦 **{data['lots_df']['scheme'].nunique()}** unique schemes
+                - 📦 **{len(data['lots_df'])}** FIFO lots tracked
+                - 💰 **₹{data['lots_df']['current_value'].sum()/100000:.2f}L** total portfolio value
+                """)
+                
+                # Switch to Portfolio Overview and hide landing page
+                st.session_state.show_landing = False
+                st.session_state.active_tab = 0  # Portfolio Overview is now index 0
+                
+                time.sleep(1)
+                # Rerun to show radio buttons and portfolio
+                st.rerun()
                     
-                    # Show success
-                    st.success(f"✅ **Success!** Loaded {len(data['transactions_df'])} transactions, {data['lots_df']['scheme'].nunique()} schemes, {len(data['lots_df'])} lots")
-                    
-                    # Switch to Portfolio Overview and hide landing page
-                    st.session_state.show_landing = False
-                    st.session_state.active_tab = 0  # Portfolio Overview is now index 0
-                    
-                    # Rerun to show radio buttons and portfolio
-                    st.rerun()
-                    
-            except Exception as e:
+        except Exception as e:
                 # Handle any errors during processing
                 error_msg = str(e)
                 exception_type = type(e).__name__
