@@ -205,6 +205,37 @@ def parse_pdf_cas(pdf_path, password):
         # Page 1: Portfolio summary
         page1 = pdf.pages[0].extract_text()
         
+        # Extract investor name - look for specific patterns in CAS PDFs
+        investor_name = None
+        lines = page1.split('\n')
+        for i, line in enumerate(lines):
+            # Pattern 1: Explicit "Name : " or "Name: " prefix
+            name_match = re.search(r'^\s*Name\s*:\s*(.+)$', line, re.IGNORECASE)
+            if name_match:
+                investor_name = name_match.group(1).strip()
+                # Remove any trailing content after PAN or email patterns
+                investor_name = re.sub(r'\s+PAN\s*:.*$', '', investor_name, flags=re.IGNORECASE)
+                investor_name = re.sub(r'\s+\S+@\S+', '', investor_name)
+                break
+            
+            # Pattern 2: Look for line starting with "Dear" (common in CAS)
+            dear_match = re.search(r'^Dear\s+(.+?)(?:,|$)', line, re.IGNORECASE)
+            if dear_match:
+                investor_name = dear_match.group(1).strip()
+                break
+            
+            # Pattern 3: Name appears after email line (CAMS format)
+            # Look for capitalized words pattern after email line
+            if '@' in line and 'Email' in line and i + 1 < len(lines):
+                for j in range(i + 1, min(i + 5, len(lines))):
+                    # Try to extract name from beginning of line (capitalized words)
+                    name_pattern = re.match(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:\s+[a-z]|$)', lines[j])
+                    if name_pattern:
+                        investor_name = name_pattern.group(1).strip()
+                        break
+                if investor_name:
+                    break
+        
         amc_totals = {}
         for line in page1.split('\n'):
             match = re.search(r'(.+?(?:Mutual Fund|MF))\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)', line)
@@ -328,7 +359,7 @@ def parse_pdf_cas(pdf_path, password):
                     'balance': balance
                 })
     
-    return pd.DataFrame(transactions), current_navs
+    return pd.DataFrame(transactions), current_navs, investor_name
 
 
 def calculate_fifo_lots(transactions_df):
@@ -577,8 +608,8 @@ def process_pdf(pdf_bytes, password):
             pdf_path = tmp_file.name
         
         try:
-            # Parse PDF - now returns transactions AND current NAVs from Closing Balance lines
-            transactions_df, current_navs = parse_pdf_cas(pdf_path, password)
+            # Parse PDF - now returns transactions, current NAVs, and investor name
+            transactions_df, current_navs, investor_name = parse_pdf_cas(pdf_path, password)
             
             if len(transactions_df) == 0:
                 return None
@@ -640,7 +671,8 @@ def process_pdf(pdf_bytes, password):
     return {
         'lots_df': lots_df,
         'transactions_df': transactions_df,
-        'nav_dict': nav_dict
+        'nav_dict': nav_dict,
+        'investor_name': investor_name
     }
 
 # ===================== END CORE FUNCTIONS =====================
@@ -1017,10 +1049,9 @@ if active_tab is None:
             # Process PDF - use None if password is empty
             pdf_password = password if password else None
             
-            progress_text.markdown("💼 **Calculating FIFO lots...**")
-            progress_bar.progress(60)
-            
-            data = process_pdf(pdf_bytes, pdf_password)
+            with st.spinner("💼 Calculating FIFO lots..."):
+                progress_bar.progress(60)
+                data = process_pdf(pdf_bytes, pdf_password)
             
             progress_text.markdown("✨ **Finalizing analytics...**")
             progress_bar.progress(80)
@@ -1178,6 +1209,12 @@ elif active_tab is not None:
         if active_tab == 0:
             # Portfolio Overview
             st.header("Portfolio Overview")
+            
+            # Show investor name if available
+            investor_name = data.get('investor_name')
+            if investor_name:
+                st.markdown(f"### 👤 {investor_name}")
+                st.markdown("---")
             
             # Show quick info bar at top - only on Portfolio Overview tab
             st.info(f"📊 Loaded: {len(transactions_df)} transactions | {lots_df['scheme'].nunique()} schemes | {len(lots_df)} lots")
