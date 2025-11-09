@@ -1,4 +1,4 @@
-"""
+﻿"""
 Interactive Portfolio Tax Harvesting Web App
 Built with Streamlit - Run with: streamlit run portfolio_app.py
 """
@@ -155,7 +155,7 @@ def classify_fund_type(scheme_name):
     international_keywords = ['international', 'global', 'foreign', 'overseas', 'world', 
                              'us equity', 'nasdaq', 'emerging market']
     if any(keyword in scheme_lower for keyword in international_keywords):
-        return 'international', 36 * 30  # 36 months in days
+        return 'international', 1095  # 36 months = 3 years in days
     
     # Debt funds (36 months LTCG)
     debt_keywords = ['liquid', 'ultra short', 'low duration', 'money market', 'overnight',
@@ -163,10 +163,10 @@ def classify_fund_type(scheme_name):
                     'corporate bond', 'dynamic bond', 'floating rate', 'short duration',
                     'medium duration', 'long duration']
     if any(keyword in scheme_lower for keyword in debt_keywords):
-        return 'debt', 36 * 30  # 36 months in days
+        return 'debt', 1095  # 36 months = 3 years in days
     
     # Default: Equity (12 months LTCG)
-    return 'equity', 12 * 30  # 12 months in days
+    return 'equity', 365  # 12 months = 1 year in days
 
 
 def calculate_xirr(cashflows):
@@ -417,6 +417,144 @@ def calculate_cagr(invested, current_value, days):
         return 0
 
 
+def calculate_realized_gains_current_fy(transactions_df):
+    """Calculate realized capital gains (LTCG/STCG) for the current financial year using FIFO method."""
+    
+    # Determine current FY
+    today = datetime.now()
+    if today.month >= 4:  # April to December
+        fy_start = datetime(today.year, 4, 1)
+        fy_end = datetime(today.year + 1, 3, 31)
+    else:  # January to March
+        fy_start = datetime(today.year - 1, 4, 1)
+        fy_end = datetime(today.year, 3, 31)
+    
+    # Filter redemption transactions in current FY (units < 0 means redemption)
+    redemptions = transactions_df[
+        (transactions_df['units'] < 0) &
+        (transactions_df['date'] >= fy_start) &
+        (transactions_df['date'] <= fy_end)
+    ].copy()
+    
+    if len(redemptions) == 0:
+        return None, []
+    
+    # Group by scheme and calculate gains
+    schemes = redemptions['scheme'].unique()
+    
+    summary_data = []
+    detailed_data = []
+    
+    for scheme in schemes:
+        scheme_redemptions = redemptions[redemptions['scheme'] == scheme].sort_values('date')
+        scheme_purchases = transactions_df[
+            (transactions_df['scheme'] == scheme) &
+            (transactions_df['units'] > 0) &  # units > 0 means purchase
+            (transactions_df['date'] < fy_end)  # All purchases before FY end
+        ].sort_values('date').copy()
+        
+        if len(scheme_purchases) == 0:
+            continue
+        
+        # Get fund type using classify_fund_type function
+        fund_type, ltcg_days = classify_fund_type(scheme)
+        
+        # Track remaining units in each purchase lot
+        purchase_lots = []
+        for _, purchase in scheme_purchases.iterrows():
+            purchase_lots.append({
+                'date': purchase['date'],
+                'units': purchase['units'],
+                'price': purchase['price'],
+                'remaining_units': purchase['units']
+            })
+        
+        scheme_ltcg = 0
+        scheme_stcg = 0
+        
+        # Process each redemption
+        for _, redemption in scheme_redemptions.iterrows():
+            sell_date = redemption['date']
+            sell_units = abs(redemption['units'])  # Make positive (units are negative for redemptions)
+            sell_price = redemption['price']
+            sell_value = sell_units * sell_price
+            
+            remaining_to_sell = sell_units
+            matched_lots = []
+            txn_ltcg = 0
+            txn_stcg = 0
+            
+            # Match with purchase lots (FIFO)
+            for lot in purchase_lots:
+                if remaining_to_sell <= 0:
+                    break
+                
+                if lot['remaining_units'] > 0:
+                    # Calculate holding period
+                    holding_days = (sell_date - lot['date']).days
+                    is_lt = holding_days > ltcg_days  # Use ltcg_days from fund classification
+                    
+                    # Determine how many units to take from this lot
+                    units_from_lot = min(remaining_to_sell, lot['remaining_units'])
+                    
+                    # Calculate gain from this lot
+                    invested = units_from_lot * lot['price']
+                    redemption_value = units_from_lot * sell_price
+                    gain = redemption_value - invested
+                    
+                    # Classify as LT or ST
+                    if is_lt:
+                        txn_ltcg += gain
+                    else:
+                        txn_stcg += gain
+                    
+                    # Record matched lot
+                    matched_lots.append({
+                        'purchase_date': lot['date'],
+                        'units': units_from_lot,
+                        'purchase_price': lot['price'],
+                        'invested': invested,
+                        'redemption_value': redemption_value,
+                        'gain': gain,
+                        'holding_days': holding_days,
+                        'is_lt': is_lt
+                    })
+                    
+                    # Update remaining units
+                    lot['remaining_units'] -= units_from_lot
+                    remaining_to_sell -= units_from_lot
+            
+            # Store detailed transaction
+            detailed_data.append({
+                'scheme': scheme,
+                'fund_type': fund_type,
+                'sell_date': sell_date,
+                'sell_units': sell_units,
+                'sell_price': sell_price,
+                'sell_value': sell_value,
+                'ltcg': txn_ltcg,
+                'stcg': txn_stcg,
+                'matched_lots': matched_lots
+            })
+            
+            scheme_ltcg += txn_ltcg
+            scheme_stcg += txn_stcg
+        
+        # Store summary for scheme
+        summary_data.append({
+            'scheme': scheme,
+            'fund_type': fund_type,
+            'ltcg': scheme_ltcg,
+            'stcg': scheme_stcg,
+            'total_gain': scheme_ltcg + scheme_stcg,
+            'num_transactions': len(scheme_redemptions)
+        })
+    
+    summary_df = pd.DataFrame(summary_data) if summary_data else None
+    
+    return summary_df, detailed_data
+
+
 @st.cache_data(show_spinner=False)
 def process_pdf(pdf_bytes, password):
     """Process PDF and return all calculated data. Results are cached based on file content and password."""
@@ -612,7 +750,7 @@ if st.button("🏠 Home", key="home_btn", help="Return to landing page to upload
 st.markdown("---")
 
 # Tab names - no longer includes Landing Page
-tab_names = ["📊 Portfolio Overview", "📋 All Holdings", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
+tab_names = ["📊 Portfolio Overview", "📋 All Holdings", "💼 Realized Gains", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
 
 # Show radio buttons only when NOT on landing page AND data is processed
 if not st.session_state.show_landing and st.session_state.processed_data is not None:
@@ -1216,6 +1354,215 @@ elif active_tab is not None:
             show_donation_banner()
         
         elif active_tab == 2:
+            # Realized Gains (Current Financial Year)
+            st.header("Realized Gains - Current Financial Year")
+            
+            # Determine current FY
+            today = datetime.now()
+            if today.month >= 4:  # April to December
+                fy_start = datetime(today.year, 4, 1)
+                fy_end = datetime(today.year + 1, 3, 31)
+                fy_label = f"FY {today.year}-{str(today.year + 1)[-2:]}"
+            else:  # January to March
+                fy_start = datetime(today.year - 1, 4, 1)
+                fy_end = datetime(today.year, 3, 31)
+                fy_label = f"FY {today.year - 1}-{str(today.year)[-2:]}"
+            
+            st.info(f"ℹ️ Showing realized gains for **{fy_label}** ({fy_start.strftime('%d %b %Y')} to {fy_end.strftime('%d %b %Y')})")
+            
+            # Calculate realized gains
+            realized_summary_df, realized_details_list = calculate_realized_gains_current_fy(transactions_df)
+            
+            if realized_summary_df is None or len(realized_summary_df) == 0:
+                st.warning("🔍 No redemption transactions found in the current financial year.")
+                st.info("💡 This tab shows capital gains from mutual fund redemptions (sell transactions) in the current FY using FIFO method.")
+            else:
+                # ========== SUMMARY TABLE ==========
+                st.subheader("📊 Summary by Scheme")
+                
+                # Calculate totals
+                total_ltcg = realized_summary_df['ltcg'].sum()
+                total_stcg = realized_summary_df['stcg'].sum()
+                total_gain = total_ltcg + total_stcg
+                total_txns = realized_summary_df['num_transactions'].sum()
+                
+                # Show aggregate metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                # LTCG metric with proper sign and color
+                ltcg_display = f"₹{format_indian_number(total_ltcg)}" if total_ltcg >= 0 else f"-₹{format_indian_number(abs(total_ltcg))}"
+                col1.metric("Total LTCG", ltcg_display, 
+                           delta="Profit" if total_ltcg >= 0 else "Loss",
+                           delta_color="normal" if total_ltcg >= 0 else "inverse")
+                
+                # STCG metric with proper sign and color
+                stcg_display = f"₹{format_indian_number(total_stcg)}" if total_stcg >= 0 else f"-₹{format_indian_number(abs(total_stcg))}"
+                col2.metric("Total STCG", stcg_display, 
+                           delta="Profit" if total_stcg >= 0 else "Loss",
+                           delta_color="normal" if total_stcg >= 0 else "inverse")
+                
+                # Total gain with proper sign
+                total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
+                col3.metric("Total Gains", total_display,
+                           delta="Net Profit" if total_gain >= 0 else "Net Loss",
+                           delta_color="normal" if total_gain >= 0 else "inverse")
+                
+                col4.metric("Schemes", f"{len(realized_summary_df)}", 
+                           delta=f"{int(total_txns)} txns")
+                
+                st.markdown("---")
+                
+                # Format summary table
+                display_summary = realized_summary_df.copy()
+                display_summary['Scheme'] = display_summary['scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
+                display_summary['Type'] = display_summary['fund_type'].str.upper()
+                
+                # Format with color coding for gains/losses
+                def format_gain_with_color(val):
+                    if val >= 0:
+                        return f'<span style="color: green;">₹{format_indian_number(val)}</span>'
+                    else:
+                        return f'<span style="color: red;">-₹{format_indian_number(abs(val))}</span>'
+                
+                display_summary['LTCG'] = display_summary['ltcg'].apply(lambda x: format_gain_with_color(x))
+                display_summary['STCG'] = display_summary['stcg'].apply(lambda x: format_gain_with_color(x))
+                display_summary['Total Gain'] = display_summary['total_gain'].apply(lambda x: format_gain_with_color(x))
+                display_summary['Txns'] = display_summary['num_transactions'].astype(int)
+                
+                final_summary = display_summary[['Scheme', 'Type', 'LTCG', 'STCG', 'Total Gain', 'Txns']]
+                
+                # Display with HTML rendering for colors
+                st.markdown(final_summary.to_html(escape=False, index=False), unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # ========== DETAILED VIEW ==========
+                st.subheader("🔎 Detailed Transaction View")
+                
+                # Filter dropdown - only show schemes with non-zero gains
+                schemes_with_gains = realized_summary_df['scheme'].tolist()
+                
+                if 'realized_gains_scheme' not in st.session_state:
+                    st.session_state.realized_gains_scheme = schemes_with_gains[0]
+                
+                selected_scheme = st.selectbox(
+                    "Select Scheme",
+                    schemes_with_gains,
+                    index=schemes_with_gains.index(st.session_state.realized_gains_scheme) if st.session_state.realized_gains_scheme in schemes_with_gains else 0,
+                    key='realized_gains_scheme',
+                    help="View detailed breakdown of redemptions and matched purchase lots"
+                )
+                
+                # Filter details for selected scheme
+                scheme_details = [d for d in realized_details_list if d['scheme'] == selected_scheme]
+                
+                if len(scheme_details) == 0:
+                    st.warning(f"No transactions found for {selected_scheme}")
+                else:
+                    # Calculate scheme totals
+                    scheme_ltcg = sum(d['ltcg'] for d in scheme_details)
+                    scheme_stcg = sum(d['stcg'] for d in scheme_details)
+                    scheme_total = scheme_ltcg + scheme_stcg
+                    fund_type = scheme_details[0]['fund_type'].upper()
+                    
+                    # Quick summary bar
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    ltcg_display = f"₹{format_indian_number(scheme_ltcg)}" if scheme_ltcg >= 0 else f"-₹{format_indian_number(abs(scheme_ltcg))}"
+                    stcg_display = f"₹{format_indian_number(scheme_stcg)}" if scheme_stcg >= 0 else f"-₹{format_indian_number(abs(scheme_stcg))}"
+                    total_display = f"₹{format_indian_number(scheme_total)}" if scheme_total >= 0 else f"-₹{format_indian_number(abs(scheme_total))}"
+                    
+                    col1.metric("LTCG", ltcg_display)
+                    col2.metric("STCG", stcg_display)
+                    col3.metric("Total", total_display)
+                    col4.metric("Fund Type", fund_type)
+                    
+                    st.markdown("---")
+                    
+                    # Separate LT and ST transactions
+                    lt_transactions = [d for d in scheme_details if d['ltcg'] != 0]
+                    st_transactions = [d for d in scheme_details if d['stcg'] != 0]
+                    
+                    # ========== LONG TERM GAINS ==========
+                    if len(lt_transactions) > 0:
+                        st.markdown("#### 📗 Long Term Capital Gains (LTCG)")
+                        
+                        for idx, txn in enumerate(lt_transactions, 1):
+                            ltcg_val = txn['ltcg']
+                            ltcg_display = f"₹{format_indian_number(ltcg_val)}" if ltcg_val >= 0 else f"-₹{format_indian_number(abs(ltcg_val))}"
+                            ltcg_color = "green" if ltcg_val >= 0 else "red"
+                            
+                            with st.expander(f"**Redemption #{idx}** — {txn['sell_date'].strftime('%d %b %Y')} — ₹{format_indian_number(txn['sell_value'])} ({txn['sell_units']:.2f} units @ ₹{txn['sell_price']:.2f})", expanded=(idx==1)):
+                                st.markdown(f"**LTCG:** <span style='color: {ltcg_color}; font-weight: bold;'>{ltcg_display}</span>", unsafe_allow_html=True)
+                                
+                                # Show matched lots
+                                st.markdown("**Matched Purchase Lots (FIFO):**")
+                                
+                                lt_lots = [lot for lot in txn['matched_lots'] if lot['is_lt']]
+                                
+                                if len(lt_lots) > 0:
+                                    lot_data = []
+                                    for lot in lt_lots:
+                                        lot_data.append({
+                                            'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
+                                            'Units': f"{lot['units']:.2f}",
+                                            'Buy Price': f"₹{lot['purchase_price']:.2f}",
+                                            'Sell Price': f"₹{txn['sell_price']:.2f}",
+                                            'Invested': format_indian_rupee_compact(lot['invested']),
+                                            'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
+                                            'Gain': format_indian_rupee_compact(lot['gain']),
+                                            'Holding': f"{lot['holding_days']} days"
+                                        })
+                                    
+                                    lot_df = pd.DataFrame(lot_data)
+                                    st.dataframe(lot_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.markdown("#### 📗 Long Term Capital Gains (LTCG)")
+                        st.info("No long-term redemptions for this scheme in current FY")
+                    
+                    st.markdown("---")
+                    
+                    # ========== SHORT TERM GAINS ==========
+                    if len(st_transactions) > 0:
+                        st.markdown("#### 📕 Short Term Capital Gains (STCG)")
+                        
+                        for idx, txn in enumerate(st_transactions, 1):
+                            stcg_val = txn['stcg']
+                            stcg_display = f"₹{format_indian_number(stcg_val)}" if stcg_val >= 0 else f"-₹{format_indian_number(abs(stcg_val))}"
+                            stcg_color = "green" if stcg_val >= 0 else "red"
+                            
+                            with st.expander(f"**Redemption #{idx}** — {txn['sell_date'].strftime('%d %b %Y')} — ₹{format_indian_number(txn['sell_value'])} ({txn['sell_units']:.2f} units @ ₹{txn['sell_price']:.2f})", expanded=(idx==1)):
+                                st.markdown(f"**STCG:** <span style='color: {stcg_color}; font-weight: bold;'>{stcg_display}</span>", unsafe_allow_html=True)
+                                
+                                # Show matched lots
+                                st.markdown("**Matched Purchase Lots (FIFO):**")
+                                
+                                st_lots = [lot for lot in txn['matched_lots'] if not lot['is_lt']]
+                                
+                                if len(st_lots) > 0:
+                                    lot_data = []
+                                    for lot in st_lots:
+                                        lot_data.append({
+                                            'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
+                                            'Units': f"{lot['units']:.2f}",
+                                            'Buy Price': f"₹{lot['purchase_price']:.2f}",
+                                            'Sell Price': f"₹{txn['sell_price']:.2f}",
+                                            'Invested': format_indian_rupee_compact(lot['invested']),
+                                            'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
+                                            'Gain': format_indian_rupee_compact(lot['gain']),
+                                            'Holding': f"{lot['holding_days']} days"
+                                        })
+                                    
+                                    lot_df = pd.DataFrame(lot_data)
+                                    st.dataframe(lot_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.markdown("#### 📕 Short Term Capital Gains (STCG)")
+                        st.info("No short-term redemptions for this scheme in current FY")
+            
+            # Show donation banner at bottom
+            show_donation_banner()
+        
+        elif active_tab == 3:
             # Single-Scheme Tax Harvest
             st.header("Single-Scheme Tax Harvesting")
             
@@ -1487,7 +1834,7 @@ elif active_tab is not None:
             # Show donation banner at bottom
             show_donation_banner()
         
-        elif active_tab == 3:
+        elif active_tab == 4:
             # Multi-Fund Strategy
             st.header("🎯 Multi-Fund Balanced Tax Harvesting Strategy")
             
@@ -1551,6 +1898,9 @@ elif active_tab is not None:
                 )
                 
                 st.markdown("---")
+                
+                st.info("ℹ️ All strategies aim to get as close as possible to your LTCG target without exceeding it.")
+                
                 st.subheader("Strategy Results")
                 
                 # Get selected schemes data
@@ -1561,122 +1911,183 @@ elif active_tab is not None:
                 allocations = {}
                 
                 if strategy == "Equal LTCG":
-                    # Equal LTCG per fund with redistribution of shortfalls
-                    base_allocation = ltcg_budget / num_funds
+                    # Multi-stage Equal LTCG: iteratively handle bottlenecks
+                    # Stage 1: Try equal distribution
+                    # Stage 2+: Lock bottleneck funds, recalculate equal for remaining funds
                     
-                    # First pass: calculate what each fund can actually contribute
-                    first_pass_results = {}
-                    for scheme in selected_schemes:
-                        scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
-                        max_available_gain = scheme_data['gain_loss']
-                        allocated = min(base_allocation, max_available_gain)
-                        first_pass_results[scheme] = {
-                            'allocated': allocated,
-                            'max_available': max_available_gain,
-                            'can_take_more': max_available_gain > base_allocation
-                        }
+                    remaining_budget = ltcg_budget
+                    remaining_funds = set(selected_schemes)
+                    locked_allocations = {}
                     
-                    # Calculate shortfall
-                    total_allocated = sum(r['allocated'] for r in first_pass_results.values())
-                    shortfall = ltcg_budget - total_allocated
+                    while remaining_funds and remaining_budget > 0:
+                        target_per_fund = remaining_budget / len(remaining_funds)
+                        bottlenecks = []
+                        
+                        for scheme in remaining_funds:
+                            scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
+                            max_available = scheme_data['gain_loss']
+                            
+                            if max_available < target_per_fund:
+                                # This fund is a bottleneck - lock it at max
+                                locked_allocations[scheme] = max_available
+                                remaining_budget -= max_available
+                                bottlenecks.append(scheme)
+                        
+                        if not bottlenecks:
+                            # No bottlenecks - allocate target to all remaining funds
+                            for scheme in remaining_funds:
+                                locked_allocations[scheme] = target_per_fund
+                            break
+                        else:
+                            # Remove bottlenecks and recalculate for remaining
+                            remaining_funds -= set(bottlenecks)
                     
-                    # Second pass: redistribute shortfall to funds that can take more
-                    if shortfall > 0:
-                        funds_with_capacity = [s for s in selected_schemes if first_pass_results[s]['can_take_more']]
-                        if len(funds_with_capacity) > 0:
-                            # Distribute shortfall proportionally among funds with capacity
-                            for scheme in funds_with_capacity:
-                                available_capacity = first_pass_results[scheme]['max_available'] - first_pass_results[scheme]['allocated']
-                                total_capacity = sum(first_pass_results[s]['max_available'] - first_pass_results[s]['allocated'] for s in funds_with_capacity)
-                                
-                                if total_capacity > 0:
-                                    additional = min(shortfall * (available_capacity / total_capacity), available_capacity)
-                                    first_pass_results[scheme]['allocated'] += additional
-                    
-                    # Final allocations
-                    for scheme in selected_schemes:
-                        allocations[scheme] = first_pass_results[scheme]['allocated']
-                    
+                    allocations = locked_allocations
                     total_final = sum(allocations.values())
-                    st.info(f"**Strategy:** Equal LTCG distribution (₹{format_indian_number(base_allocation)} target per fund) → Total achieved: ₹{format_indian_number(total_final)}")
+                    base_allocation = ltcg_budget / num_funds
+                    st.info(f"**Strategy:** Equal LTCG (₹{format_indian_number(base_allocation)} target/fund, adjusted for bottlenecks) → Total: ₹{format_indian_number(total_final)}")
                 
                 elif strategy == "Equal Redemption Value":
-                    # Equal redemption value with shortfall redistribution
+                    # Multi-stage Equal Redemption: iteratively handle bottlenecks
+                    # Calculate equal redemption value that yields LTCG within budget
+                    
+                    # Helper function to calculate LTCG from a redemption value for a scheme
+                    def calc_ltcg_from_redemption(scheme, redemption_value):
+                        scheme_lots = lots_df[(lots_df['scheme'] == scheme) & (lots_df['is_lt'])].copy()
+                        if len(scheme_lots) == 0:
+                            return 0, 0
+                        
+                        scheme_lots = scheme_lots.sort_values('purchase_date')
+                        current_nav = scheme_lots.iloc[0]['current_nav']
+                        
+                        cumulative_gain = 0
+                        cumulative_value = 0
+                        
+                        for _, lot in scheme_lots.iterrows():
+                            if cumulative_value >= redemption_value:
+                                break
+                            lot_value = lot['units'] * current_nav
+                            remaining_value = redemption_value - cumulative_value
+                            
+                            if lot_value <= remaining_value:
+                                cumulative_gain += lot['gain_loss']
+                                cumulative_value += lot_value
+                            else:
+                                # Partial lot
+                                units_needed = remaining_value / current_nav
+                                partial_invested = units_needed * lot['purchase_price']
+                                partial_gain = remaining_value - partial_invested
+                                cumulative_gain += partial_gain
+                                cumulative_value += remaining_value
+                                break
+                        
+                        max_available = scheme_lots['gain_loss'].sum()
+                        return cumulative_gain, max_available
+                    
+                    # Estimate initial redemption value per fund
                     total_value = selected_schemes_data['current_value'].sum()
-                    total_gain = selected_schemes_data['gain_loss'].sum()
-                    avg_gain_pct = total_gain / (total_value - total_gain) if (total_value - total_gain) > 0 else 0.3
-                    target_redemption_per_fund = ltcg_budget / (avg_gain_pct * num_funds)
+                    total_invested = total_value - selected_schemes_data['gain_loss'].sum()
+                    overall_gain_ratio = selected_schemes_data['gain_loss'].sum() / total_invested if total_invested > 0 else 0
+                    estimated_redemption_per_fund = ltcg_budget / (num_funds * overall_gain_ratio) if overall_gain_ratio > 0 else 0
                     
-                    # First pass
-                    first_pass_results = {}
-                    for scheme in selected_schemes:
-                        scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
-                        scheme_gain = scheme_data['gain_loss']
-                        scheme_value = scheme_data['current_value']
-                        max_available = scheme_gain
-                        scheme_gain_pct = scheme_gain / (scheme_value - scheme_gain) if (scheme_value - scheme_gain) > 0 else 0.3
-                        target_ltcg = target_redemption_per_fund * scheme_gain_pct
-                        allocated = min(target_ltcg, max_available)
-                        first_pass_results[scheme] = {
-                            'allocated': allocated,
-                            'max_available': max_available,
-                            'can_take_more': max_available > target_ltcg
-                        }
+                    # Multi-stage: lock bottlenecks, recalculate equal redemption for remaining
+                    remaining_budget = ltcg_budget
+                    remaining_funds = set(selected_schemes)
+                    locked_allocations = {}
                     
-                    # Redistribute shortfall
-                    total_allocated = sum(r['allocated'] for r in first_pass_results.values())
-                    shortfall = ltcg_budget - total_allocated
-                    if shortfall > 0:
-                        funds_with_capacity = [s for s in selected_schemes if first_pass_results[s]['can_take_more']]
-                        if len(funds_with_capacity) > 0:
-                            for scheme in funds_with_capacity:
-                                available_capacity = first_pass_results[scheme]['max_available'] - first_pass_results[scheme]['allocated']
-                                total_capacity = sum(first_pass_results[s]['max_available'] - first_pass_results[s]['allocated'] for s in funds_with_capacity)
-                                if total_capacity > 0:
-                                    additional = min(shortfall * (available_capacity / total_capacity), available_capacity)
-                                    first_pass_results[scheme]['allocated'] += additional
+                    iteration = 0
+                    max_iterations = num_funds  # Prevent infinite loops
                     
-                    for scheme in selected_schemes:
-                        allocations[scheme] = first_pass_results[scheme]['allocated']
+                    while remaining_funds and remaining_budget > 0 and iteration < max_iterations:
+                        iteration += 1
+                        
+                        # Calculate target redemption for remaining funds
+                        if iteration == 1:
+                            target_redemption = estimated_redemption_per_fund
+                        else:
+                            # Recalculate based on remaining budget and funds
+                            # Use average gain ratio of remaining funds
+                            remaining_schemes_data = selected_schemes_data[selected_schemes_data['scheme'].isin(remaining_funds)]
+                            remaining_total_value = remaining_schemes_data['current_value'].sum()
+                            remaining_total_invested = remaining_total_value - remaining_schemes_data['gain_loss'].sum()
+                            remaining_gain_ratio = remaining_schemes_data['gain_loss'].sum() / remaining_total_invested if remaining_total_invested > 0 else 0
+                            
+                            if remaining_gain_ratio > 0:
+                                target_redemption = remaining_budget / (len(remaining_funds) * remaining_gain_ratio)
+                            else:
+                                target_redemption = remaining_budget / len(remaining_funds)
+                        
+                        bottlenecks = []
+                        
+                        for scheme in list(remaining_funds):
+                            ltcg_from_target, max_available = calc_ltcg_from_redemption(scheme, target_redemption)
+                            
+                            if ltcg_from_target >= max_available * 0.99:  # Within 1% of max = bottleneck
+                                # Lock at maximum
+                                locked_allocations[scheme] = max_available
+                                remaining_budget -= max_available
+                                bottlenecks.append(scheme)
+                            elif iteration == max_iterations - 1:
+                                # Last iteration - allocate whatever we calculated
+                                locked_allocations[scheme] = min(ltcg_from_target, remaining_budget)
+                                remaining_budget -= locked_allocations[scheme]
+                        
+                        if not bottlenecks or iteration == max_iterations - 1:
+                            # No bottlenecks - allocate to all remaining funds
+                            for scheme in remaining_funds:
+                                if scheme not in locked_allocations:
+                                    ltcg_from_target, _ = calc_ltcg_from_redemption(scheme, target_redemption)
+                                    locked_allocations[scheme] = min(ltcg_from_target, remaining_budget / len([s for s in remaining_funds if s not in locked_allocations]))
+                            break
+                        else:
+                            # Remove bottlenecks and continue
+                            remaining_funds -= set(bottlenecks)
                     
+                    allocations = locked_allocations
                     total_final = sum(allocations.values())
-                    st.info(f"**Strategy:** Equal redemption value (~₹{format_indian_number(target_redemption_per_fund)} per fund) → Total LTCG: ₹{format_indian_number(total_final)}")
+                    st.info(f"**Strategy:** Equal redemption value (~₹{format_indian_number(estimated_redemption_per_fund)}/fund, {iteration} iterations) → Total LTCG: ₹{format_indian_number(total_final)}")
                 
                 elif strategy == "Proportional to Holdings":
-                    # Proportional to current value with shortfall redistribution
-                    total_value = selected_schemes_data['current_value'].sum()
+                    # Multi-stage Proportional to Holdings: handle bottlenecks iteratively
                     
-                    # First pass
-                    first_pass_results = {}
-                    for scheme in selected_schemes:
-                        scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
-                        scheme_value = scheme_data['current_value']
-                        max_available = scheme_data['gain_loss']
-                        weight = scheme_value / total_value
-                        target_ltcg = ltcg_budget * weight
-                        allocated = min(target_ltcg, max_available)
-                        first_pass_results[scheme] = {
-                            'allocated': allocated,
-                            'max_available': max_available,
-                            'can_take_more': max_available > target_ltcg
-                        }
+                    remaining_budget = ltcg_budget
+                    remaining_funds = set(selected_schemes)
+                    locked_allocations = {}
                     
-                    # Redistribute shortfall
-                    total_allocated = sum(r['allocated'] for r in first_pass_results.values())
-                    shortfall = ltcg_budget - total_allocated
-                    if shortfall > 0:
-                        funds_with_capacity = [s for s in selected_schemes if first_pass_results[s]['can_take_more']]
-                        if len(funds_with_capacity) > 0:
-                            for scheme in funds_with_capacity:
-                                available_capacity = first_pass_results[scheme]['max_available'] - first_pass_results[scheme]['allocated']
-                                total_capacity = sum(first_pass_results[s]['max_available'] - first_pass_results[s]['allocated'] for s in funds_with_capacity)
-                                if total_capacity > 0:
-                                    additional = min(shortfall * (available_capacity / total_capacity), available_capacity)
-                                    first_pass_results[scheme]['allocated'] += additional
+                    while remaining_funds and remaining_budget > 0:
+                        # Calculate proportions based on remaining funds only
+                        remaining_schemes_data = selected_schemes_data[selected_schemes_data['scheme'].isin(remaining_funds)]
+                        total_value = remaining_schemes_data['current_value'].sum()
+                        
+                        bottlenecks = []
+                        
+                        for scheme in remaining_funds:
+                            scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
+                            scheme_value = scheme_data['current_value']
+                            max_available = scheme_data['gain_loss']
+                            
+                            weight = scheme_value / total_value if total_value > 0 else 1.0 / len(remaining_funds)
+                            target_ltcg = remaining_budget * weight
+                            
+                            if target_ltcg >= max_available:
+                                # Bottleneck - lock at max
+                                locked_allocations[scheme] = max_available
+                                remaining_budget -= max_available
+                                bottlenecks.append(scheme)
+                        
+                        if not bottlenecks:
+                            # No bottlenecks - allocate proportionally to all remaining
+                            for scheme in remaining_funds:
+                                scheme_data = selected_schemes_data[selected_schemes_data['scheme'] == scheme].iloc[0]
+                                scheme_value = scheme_data['current_value']
+                                weight = scheme_value / total_value if total_value > 0 else 1.0 / len(remaining_funds)
+                                locked_allocations[scheme] = remaining_budget * weight
+                            break
+                        else:
+                            # Remove bottlenecks and recalculate
+                            remaining_funds -= set(bottlenecks)
                     
-                    for scheme in selected_schemes:
-                        allocations[scheme] = first_pass_results[scheme]['allocated']
-                    
+                    allocations = locked_allocations
                     total_final = sum(allocations.values())
                     st.info(f"**Strategy:** Proportional to holdings → Total LTCG: ₹{format_indian_number(total_final)}")
                 
@@ -1694,6 +2105,15 @@ elif active_tab is not None:
                     
                     total_final = sum(allocations.values())
                     st.info(f"**Strategy:** Proportional to available LT gains → Total LTCG: ₹{format_indian_number(total_final)}")
+                
+                # SAFETY CHECK: Ensure total LTCG doesn't exceed budget
+                total_allocated = sum(allocations.values())
+                if total_allocated > ltcg_budget:
+                    # Scale down proportionally to fit within budget
+                    scale_factor = ltcg_budget / total_allocated
+                    for scheme in allocations:
+                        allocations[scheme] *= scale_factor
+                    st.warning(f"⚠️ Allocations scaled down to fit within budget of ₹{format_indian_number(ltcg_budget)}")
                 
                 # Calculate for each selected scheme
                 results = []
