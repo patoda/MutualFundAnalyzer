@@ -1177,16 +1177,9 @@ elif active_tab is not None:
                 display_df = summary_df.copy()
                 display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:45] + '...' if len(x) > 45 else x)
                 display_df['Type'] = display_df['Fund Type']
-                display_df['Units'] = display_df['Total Units'].apply(lambda x: f"{x:.0f}")
-                display_df['LT'] = display_df['LT Units'].apply(lambda x: f"{x:.0f}")
-                display_df['ST'] = display_df['ST Units'].apply(lambda x: f"{x:.0f}")
-                display_df['Invested₹'] = display_df['Invested'].apply(lambda x: format_indian_rupee_compact(x))
-                display_df['Value₹'] = display_df['Current Value'].apply(lambda x: format_indian_rupee_compact(x))
-                display_df['Gain₹'] = display_df['Gain/Loss'].apply(lambda x: format_indian_rupee_compact(x))
-                display_df['Gain%'] = display_df['Gain %'].apply(lambda x: f"{x:.1f}%")
-                display_df['XIRR%'] = display_df['XIRR'].apply(lambda x: f"{x:.1f}%")
-                
-                final_df = display_df[['Scheme', 'Type', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']]
+                # Keep numeric values for proper sorting
+                final_df = display_df[['Scheme', 'Type', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %', 'XIRR']].copy()
+                final_df.columns = ['Scheme', 'Type', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']
                 
                 st.dataframe(
                     final_df,
@@ -1196,14 +1189,14 @@ elif active_tab is not None:
                     column_config={
                         "Scheme": st.column_config.TextColumn("Scheme", width="large"),
                         "Type": st.column_config.TextColumn("Type", width="small"),
-                        "Units": st.column_config.TextColumn("Units", width="small"),
-                        "LT": st.column_config.TextColumn("LT", width="small"),
-                        "ST": st.column_config.TextColumn("ST", width="small"),
-                        "Invested₹": st.column_config.TextColumn("Invested₹", width="medium"),
-                        "Value₹": st.column_config.TextColumn("Value₹", width="medium"),
-                        "Gain₹": st.column_config.TextColumn("Gain₹", width="medium"),
-                        "Gain%": st.column_config.TextColumn("Gain%", width="small"),
-                        "XIRR%": st.column_config.TextColumn("XIRR%", width="small"),
+                        "Units": st.column_config.NumberColumn("Units", format="%.0f", width="small"),
+                        "LT": st.column_config.NumberColumn("LT", format="%.0f", width="small"),
+                        "ST": st.column_config.NumberColumn("ST", format="%.0f", width="small"),
+                        "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
+                        "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
+                        "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
+                        "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
+                        "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                     }
                 )
                 
@@ -1291,23 +1284,26 @@ elif active_tab is not None:
                             st.markdown("---")
                             st.markdown("##### 📋 Individual Lots (FIFO Order)")
                             
-                            # Show LT lots - compact columns
+                            # Show LT lots - keep numeric for sorting
                             lt_display = lt_lots.sort_values('purchase_date').copy()
-                            lt_display_df = pd.DataFrame({
-                                'Date': lt_display['purchase_date'].dt.strftime('%d-%b-%y'),
-                                'Units': lt_display['units'].apply(lambda x: f"{x:.1f}"),
-                                'Buy': lt_display['purchase_price'].apply(lambda x: f"{x:.1f}"),
-                                'Inv₹': lt_display['invested'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Val₹': lt_display['current_value'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Gain₹': lt_display['gain_loss'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Gain%': lt_display['gain_pct'].apply(lambda x: f"{x*100:.1f}%"),
-                                'CAGR%': lt_display['cagr'].apply(lambda x: f"{x:.1f}%"),
-                                'Days': lt_display['holding_days'].apply(lambda x: f"{x:.0f}")
-                            })
+                            lt_display_df = lt_display[['purchase_date', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'cagr', 'holding_days']].copy()
+                            lt_display_df['gain_pct'] = lt_display_df['gain_pct'] * 100  # Convert to percentage
+                            lt_display_df.columns = ['Date', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'CAGR%', 'Days']
                             
                             st.dataframe(
                                 lt_display_df,
-                                hide_index=True
+                                hide_index=True,
+                                column_config={
+                                    "Date": st.column_config.DateColumn("Date", format="DD-MMM-YY"),
+                                    "Units": st.column_config.NumberColumn("Units", format="%.1f"),
+                                    "Buy₹": st.column_config.NumberColumn("Buy₹", format="%.1f"),
+                                    "Inv₹": st.column_config.NumberColumn("Inv₹", format="₹%.0f"),
+                                    "Val₹": st.column_config.NumberColumn("Val₹", format="₹%.0f"),
+                                    "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f"),
+                                    "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%"),
+                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
+                                    "Days": st.column_config.NumberColumn("Days", format="%.0f")
+                                }
                             )
                     
                     # === ST SUMMARY ===
@@ -1342,19 +1338,27 @@ elif active_tab is not None:
                             st.markdown("---")
                             st.markdown("##### 📋 Individual Lots (FIFO Order)")
                             
-                            # Show ST lots - compact columns
+                            # Show ST lots - keep numeric for sorting
                             st_display = st_lots.sort_values('purchase_date').copy()
-                            st_display_df = pd.DataFrame({
-                                'Date': st_display['purchase_date'].dt.strftime('%d-%b-%y'),
-                                'Units': st_display['units'].apply(lambda x: f"{x:.1f}"),
-                                'Buy': st_display['purchase_price'].apply(lambda x: f"{x:.1f}"),
-                                'Inv₹': st_display['invested'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Val₹': st_display['current_value'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Gain₹': st_display['gain_loss'].apply(lambda x: format_indian_rupee_compact(x)),
-                                'Gain%': st_display['gain_pct'].apply(lambda x: f"{x*100:.1f}%"),
-                                'CAGR%': st_display['cagr'].apply(lambda x: f"{x:.1f}%"),
-                                'Days': st_display['holding_days'].apply(lambda x: f"{x:.0f}")
-                            })
+                            st_display_df = st_display[['purchase_date', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'cagr', 'holding_days']].copy()
+                            st_display_df['gain_pct'] = st_display_df['gain_pct'] * 100  # Convert to percentage
+                            st_display_df.columns = ['Date', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'CAGR%', 'Days']
+                            
+                            st.dataframe(
+                                st_display_df,
+                                hide_index=True,
+                                column_config={
+                                    "Date": st.column_config.DateColumn("Date", format="DD-MMM-YY"),
+                                    "Units": st.column_config.NumberColumn("Units", format="%.1f"),
+                                    "Buy₹": st.column_config.NumberColumn("Buy₹", format="%.1f"),
+                                    "Inv₹": st.column_config.NumberColumn("Inv₹", format="₹%.0f"),
+                                    "Val₹": st.column_config.NumberColumn("Val₹", format="₹%.0f"),
+                                    "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f"),
+                                    "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%"),
+                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
+                                    "Days": st.column_config.NumberColumn("Days", format="%.0f")
+                                }
+                            )
                             
                             st.dataframe(
                                 st_display_df,
@@ -1679,18 +1683,11 @@ elif active_tab is not None:
                             'Cost Basis': cumulative_invested
                         })
                     
-                    # Create summary dataframe
+                    # Create summary dataframe - keep numeric for sorting
                     summary_df = pd.DataFrame(summary_data)
-                    
-                    # Format for display
-                    display_df = summary_df.copy()
-                    display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
-                    display_df['Units'] = display_df['Units to Redeem'].apply(lambda x: f"{x:.2f}")
-                    display_df['Redeem₹'] = display_df['Redemption Value'].apply(lambda x: format_indian_rupee_compact(x))
-                    display_df['LTCG₹'] = display_df['LTCG'].apply(lambda x: format_indian_rupee_compact(x))
-                    display_df['Cost₹'] = display_df['Cost Basis'].apply(lambda x: format_indian_rupee_compact(x))
-                    
-                    final_display = display_df[['Scheme', 'Units', 'Cost₹', 'Redeem₹', 'LTCG₹']]
+                    summary_df['Scheme'] = summary_df['Scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
+                    final_display = summary_df[['Scheme', 'Units to Redeem', 'Cost Basis', 'Redemption Value', 'LTCG']].copy()
+                    final_display.columns = ['Scheme', 'Units', 'Cost₹', 'Redeem₹', 'LTCG₹']
                     
                     st.dataframe(
                         final_display,
@@ -1699,10 +1696,10 @@ elif active_tab is not None:
                         use_container_width=True,
                         column_config={
                             "Scheme": st.column_config.TextColumn("Scheme", width="large"),
-                            "Units": st.column_config.TextColumn("Units", width="small"),
-                            "Cost₹": st.column_config.TextColumn("Cost₹", width="medium"),
-                            "Redeem₹": st.column_config.TextColumn("Redeem₹", width="medium"),
-                            "LTCG₹": st.column_config.TextColumn("LTCG₹", width="medium"),
+                            "Units": st.column_config.NumberColumn("Units", format="%.2f", width="small"),
+                            "Cost₹": st.column_config.NumberColumn("Cost₹", format="₹%.0f", width="medium"),
+                            "Redeem₹": st.column_config.NumberColumn("Redeem₹", format="₹%.0f", width="medium"),
+                            "LTCG₹": st.column_config.NumberColumn("LTCG₹", format="₹%.0f", width="medium"),
                         }
                     )
                     
@@ -1834,12 +1831,19 @@ elif active_tab is not None:
                             lots_sell_with_total = pd.concat([lots_sell_df, summary_row], ignore_index=True)
                             
                             st.dataframe(
-                                lots_sell_with_total.style.format({
-                                    'Units': '{:.2f}',
-                                    'Invested': '₹{:,.2f}',
-                                    'Value': '₹{:,.2f}',
-                                    'Gain': '₹{:,.2f}'
-                                })
+                                lots_sell_with_total,
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    "Purchase Date": st.column_config.TextColumn("Purchase Date"),
+                                    "Units": st.column_config.NumberColumn("Units", format="%.2f"),
+                                    "Purchase Price": st.column_config.NumberColumn("Purchase Price", format="%.2f"),
+                                    "Current NAV": st.column_config.NumberColumn("Current NAV", format="%.2f"),
+                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.2f"),
+                                    "Value": st.column_config.NumberColumn("Value", format="₹%.2f"),
+                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.2f"),
+                                    "Type": st.column_config.TextColumn("Type")
+                                }
                             )
             
             # Show donation banner at bottom
@@ -2302,14 +2306,19 @@ elif active_tab is not None:
                             lots_with_total = pd.concat([lots_display_df, summary_row], ignore_index=True)
                             
                             st.dataframe(
-                                lots_with_total.style.format({
-                                    'Units': '{:.2f}',
-                                    'Invested': '₹{:,.2f}',
-                                    'Value': '₹{:,.2f}',
-                                    'Gain': '₹{:,.2f}'
-                                }),
+                                lots_with_total,
                                 use_container_width=True,
-                                hide_index=True
+                                hide_index=True,
+                                column_config={
+                                    "Purchase Date": st.column_config.TextColumn("Purchase Date"),
+                                    "Units": st.column_config.NumberColumn("Units", format="%.2f"),
+                                    "Purchase Price": st.column_config.NumberColumn("Purchase Price", format="%.2f"),
+                                    "Current NAV": st.column_config.NumberColumn("Current NAV", format="%.2f"),
+                                    "Invested": st.column_config.NumberColumn("Invested", format="₹%.2f"),
+                                    "Value": st.column_config.NumberColumn("Value", format="₹%.2f"),
+                                    "Gain": st.column_config.NumberColumn("Gain", format="₹%.2f"),
+                                    "Type": st.column_config.TextColumn("Type")
+                                }
                             )
                 
                 # Visualization
