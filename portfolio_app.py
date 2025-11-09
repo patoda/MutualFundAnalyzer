@@ -61,45 +61,21 @@ def show_donation_banner():
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1.2rem; border-radius: 1rem; color: white; text-align: center;">
-            <h3 style="margin: 0; color: white;">☕ Buy me a treat :)</h3>
-            <div style="background-color: rgba(255,255,255,0.2); padding: 0.6rem; 
-                        border-radius: 0.5rem; margin-top: 0.8rem; font-family: monospace; font-size: 1.1rem;">
-                <span id="upi-id">{upi_id}</span>
-                <button onclick="copyUPI()" style="margin-left: 1rem; background-color: rgba(255,255,255,0.3); 
-                        border: 1px solid rgba(255,255,255,0.5); color: white; padding: 0.3rem 0.8rem; 
-                        border-radius: 0.3rem; cursor: pointer; font-size: 0.9rem;">
-                    📋 Copy
-                </button>
+                    padding: 1.5rem; border-radius: 1rem; color: white; text-align: center;">
+            <h3 style="margin: 0 0 1rem 0; color: white;">☕ Buy me a treat :)</h3>
+            <div style="display: inline-block; background-color: rgba(0,0,0,0.2); 
+                        padding: 0.5rem 1rem; border-radius: 0.3rem; font-family: monospace; 
+                        font-size: 1.1rem; user-select: all; cursor: text;">
+                {upi_id}
             </div>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; opacity: 0.9;">
-                💳 Works with GPay, PhonePe, Paytm & all UPI apps
-            </p>
         </div>
-        
-        <script>
-        function copyUPI() {{
-            const upiId = document.getElementById('upi-id').textContent;
-            navigator.clipboard.writeText(upiId).then(function() {{
-                // Show success message
-                const btn = event.target;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✅ Copied!';
-                btn.style.backgroundColor = 'rgba(76, 175, 80, 0.5)';
-                setTimeout(function() {{
-                    btn.innerHTML = originalText;
-                    btn.style.backgroundColor = 'rgba(255,255,255,0.3)';
-                }}, 2000);
-            }});
-        }}
-        </script>
-        """.format(upi_id=upi_id), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
         
         # UPI deep link button for mobile users
         st.markdown(f"""
-        <div style="text-align: center; margin-top: 1rem;">
+        <div style="text-align: center; margin-top: 0.5rem;">
             <a href="upi://pay?pa={upi_id}&pn=Portfolio Analyzer&cu=INR" 
                style="display: inline-block; background-color: #4CAF50; color: white; 
                       padding: 0.8rem 2rem; text-decoration: none; border-radius: 0.5rem; 
@@ -120,7 +96,7 @@ def show_donation_banner():
             <img src="data:image/png;base64,{qr_base64}" 
                  style="width: 150px; height: 150px; border: 3px solid #667eea; 
                         border-radius: 1rem; background: white; padding: 0.4rem;">
-            <p style="margin-top: 0.5rem; font-weight: bold; color: #667eea; font-size: 0.9rem;">Scan to Pay</p>
+            <p style="margin-top: 0.5rem; font-weight: bold; color: #667eea; font-size: 0.9rem;">Scan to Treat</p>
         </div>
         """, unsafe_allow_html=True)
 
