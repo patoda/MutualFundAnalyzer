@@ -1356,6 +1356,7 @@ if active_tab is None:
         - 💰 Tax harvesting recommendations (LTCG optimization)
         - 📈 Scheme-wise performance tracking
         - 🎯 Multi-fund balanced harvesting strategies
+        - 🔒 100% private - your data never leaves your browser
         """)
 
 # OTHER TABS - Use data from session state
