@@ -1322,9 +1322,6 @@ if active_tab is None:
         st.info(f"📊 Loaded: {len(data['transactions_df'])} transactions | {data['lots_df']['scheme'].nunique()} schemes | {len(data['lots_df'])} lots")
         
         st.write("📌 **Use the navigation tabs above to explore your portfolio, or upload a new file to replace current data.**")
-        
-        # Show donation banner at bottom
-        show_donation_banner()
     else:
         # Show welcome screen when no file uploaded or currently processing
         st.subheader("Welcome! 👋")
@@ -1360,9 +1357,6 @@ if active_tab is None:
         - 📈 Scheme-wise performance tracking
         - 🎯 Multi-fund balanced harvesting strategies
         """)
-        
-        # Show donation banner at bottom
-        show_donation_banner()
 
 # OTHER TABS - Use data from session state
 elif active_tab is not None:
