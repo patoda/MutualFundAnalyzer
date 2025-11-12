@@ -1085,7 +1085,7 @@ st.markdown('''
 <div style="text-align: center; padding: 0.5rem 0 0.5rem 0;">
     <div class="main-header">💼 Portfolio Analyzer</div>
     <p style="font-size: 1.1rem; opacity: 0.7; font-weight: 400; margin-top: -1rem;">
-        Professional Mutual Fund Analytics & Tax Harvesting Platform
+        Mutual Fund Analytics & Tax Harvesting Platform
     </p>
 </div>
 ''', unsafe_allow_html=True)
