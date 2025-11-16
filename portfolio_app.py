@@ -1891,28 +1891,48 @@ elif active_tab is not None:
                 display_summary['Scheme'] = display_summary['scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
                 display_summary['Type'] = display_summary['fund_type'].str.upper()
                 
-                # Format amounts
-                display_summary['Invested'] = display_summary['invested'].apply(lambda x: f'₹{format_indian_number(x)}')
-                display_summary['Redeemed'] = display_summary['redeemed'].apply(lambda x: f'₹{format_indian_number(x)}')
-                
-                # Format with color coding for gains/losses
-                def format_gain_with_color(val):
-                    if val > 0:
-                        return f'<span style="color: green;">₹{format_indian_number(val)}</span>'
-                    elif val < 0:
-                        return f'<span style="color: red;">-₹{format_indian_number(abs(val))}</span>'
-                    else:
-                        return f'₹{format_indian_number(val)}'
-                
-                display_summary['LTCG'] = display_summary['ltcg'].apply(lambda x: format_gain_with_color(x))
-                display_summary['STCG'] = display_summary['stcg'].apply(lambda x: format_gain_with_color(x))
-                display_summary['Total Gain'] = display_summary['total_gain'].apply(lambda x: format_gain_with_color(x))
+                # Keep numeric values for sorting, format for display
+                display_summary['Invested (₹)'] = display_summary['invested']
+                display_summary['Redeemed (₹)'] = display_summary['redeemed']
+                display_summary['LTCG (₹)'] = display_summary['ltcg']
+                display_summary['STCG (₹)'] = display_summary['stcg']
+                display_summary['Total Gain (₹)'] = display_summary['total_gain']
                 display_summary['Txns'] = display_summary['num_transactions'].astype(int)
                 
-                final_summary = display_summary[['Scheme', 'Type', 'Invested', 'Redeemed', 'LTCG', 'STCG', 'Total Gain', 'Txns']]
+                final_summary = display_summary[['Scheme', 'Type', 'Invested (₹)', 'Redeemed (₹)', 'LTCG (₹)', 'STCG (₹)', 'Total Gain (₹)', 'Txns']]
                 
-                # Display with HTML rendering for colors
-                st.markdown(final_summary.to_html(escape=False, index=False), unsafe_allow_html=True)
+                # Display with dataframe for sortable columns
+                st.dataframe(
+                    final_summary,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Invested (₹)": st.column_config.NumberColumn(
+                            "Invested (₹)",
+                            format="₹%.2f"
+                        ),
+                        "Redeemed (₹)": st.column_config.NumberColumn(
+                            "Redeemed (₹)",
+                            format="₹%.2f"
+                        ),
+                        "LTCG (₹)": st.column_config.NumberColumn(
+                            "LTCG (₹)",
+                            format="₹%.2f"
+                        ),
+                        "STCG (₹)": st.column_config.NumberColumn(
+                            "STCG (₹)",
+                            format="₹%.2f"
+                        ),
+                        "Total Gain (₹)": st.column_config.NumberColumn(
+                            "Total Gain (₹)",
+                            format="₹%.2f"
+                        ),
+                        "Txns": st.column_config.NumberColumn(
+                            "Txns",
+                            format="%d"
+                        )
+                    }
+                )
                 
                 st.markdown("---")
                 
@@ -1943,34 +1963,49 @@ elif active_tab is not None:
                     scheme_ltcg = sum(d['ltcg'] for d in scheme_details)
                     scheme_stcg = sum(d['stcg'] for d in scheme_details)
                     scheme_total = scheme_ltcg + scheme_stcg
+                    
+                    # Calculate invested and redeemed totals from matched lots
+                    scheme_invested = 0
+                    scheme_redeemed = 0
+                    for d in scheme_details:
+                        for lot in d['matched_lots']:
+                            scheme_invested += lot['invested']
+                            scheme_redeemed += lot['redemption_value']
+                    
                     fund_type = scheme_details[0]['fund_type'].upper()
                     
                     # Quick summary bar
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3, col4, col5 = st.columns(5)
                     
+                    invested_display = f"₹{format_indian_number(scheme_invested)}"
+                    redeemed_display = f"₹{format_indian_number(scheme_redeemed)}"
                     ltcg_display = f"₹{format_indian_number(scheme_ltcg)}" if scheme_ltcg >= 0 else f"-₹{format_indian_number(abs(scheme_ltcg))}"
                     stcg_display = f"₹{format_indian_number(scheme_stcg)}" if scheme_stcg >= 0 else f"-₹{format_indian_number(abs(scheme_stcg))}"
                     total_display = f"₹{format_indian_number(scheme_total)}" if scheme_total >= 0 else f"-₹{format_indian_number(abs(scheme_total))}"
                     
                     # Color-coded metrics
                     with col1:
+                        st.markdown("**Invested**")
+                        st.markdown(f"<h3 style='margin-top: 0;'>{invested_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("**Redeemed**")
+                        st.markdown(f"<h3 style='margin-top: 0;'>{redeemed_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col3:
                         st.markdown("**LTCG**")
                         ltcg_color = "green" if scheme_ltcg > 0 else ("red" if scheme_ltcg < 0 else "inherit")
                         st.markdown(f"<h3 style='color: {ltcg_color}; margin-top: 0;'>{ltcg_display}</h3>", unsafe_allow_html=True)
                     
-                    with col2:
+                    with col4:
                         st.markdown("**STCG**")
                         stcg_color = "green" if scheme_stcg > 0 else ("red" if scheme_stcg < 0 else "inherit")
                         st.markdown(f"<h3 style='color: {stcg_color}; margin-top: 0;'>{stcg_display}</h3>", unsafe_allow_html=True)
                     
-                    with col3:
-                        st.markdown("**Total**")
+                    with col5:
+                        st.markdown("**Total Gain**")
                         total_color = "green" if scheme_total > 0 else ("red" if scheme_total < 0 else "inherit")
                         st.markdown(f"<h3 style='color: {total_color}; margin-top: 0;'>{total_display}</h3>", unsafe_allow_html=True)
-                    
-                    with col4:
-                        st.markdown("**Fund Type**")
-                        st.markdown(f"<h3 style='margin-top: 0;'>{fund_type}</h3>", unsafe_allow_html=True)
                     
                     st.markdown("---")
                     
@@ -1998,28 +2033,57 @@ elif active_tab is not None:
                                 if len(lt_lots) > 0:
                                     lot_data = []
                                     for lot in lt_lots:
-                                        # Format gain with color
-                                        gain_val = lot['gain']
-                                        if gain_val > 0:
-                                            gain_display = f"<span style='color: green;'>{format_indian_rupee_compact(gain_val)}</span>"
-                                        elif gain_val < 0:
-                                            gain_display = f"<span style='color: red;'>{format_indian_rupee_compact(gain_val)}</span>"
-                                        else:
-                                            gain_display = format_indian_rupee_compact(gain_val)
-                                        
                                         lot_data.append({
-                                            'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
-                                            'Units': f"{lot['units']:.2f}",
-                                            'Buy Price': f"₹{lot['purchase_price']:.2f}",
-                                            'Sell Price': f"₹{txn['sell_price']:.2f}",
-                                            'Invested': format_indian_rupee_compact(lot['invested']),
-                                            'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
-                                            'Gain': gain_display,
-                                            'Holding': f"{lot['holding_days']} days"
+                                            'Purchase Date': lot['purchase_date'],
+                                            'Units': lot['units'],
+                                            'Buy Price (₹)': lot['purchase_price'],
+                                            'Sell Price (₹)': txn['sell_price'],
+                                            'Invested (₹)': lot['invested'],
+                                            'Redeemed (₹)': lot['redemption_value'],
+                                            'Gain (₹)': lot['gain'],
+                                            'Holding (days)': lot['holding_days']
                                         })
                                     
                                     lot_df = pd.DataFrame(lot_data)
-                                    st.markdown(lot_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+                                    st.dataframe(
+                                        lot_df,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                        column_config={
+                                            "Purchase Date": st.column_config.DateColumn(
+                                                "Purchase Date",
+                                                format="DD MMM YYYY"
+                                            ),
+                                            "Units": st.column_config.NumberColumn(
+                                                "Units",
+                                                format="%.3f"
+                                            ),
+                                            "Buy Price (₹)": st.column_config.NumberColumn(
+                                                "Buy Price (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Sell Price (₹)": st.column_config.NumberColumn(
+                                                "Sell Price (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Invested (₹)": st.column_config.NumberColumn(
+                                                "Invested (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Redeemed (₹)": st.column_config.NumberColumn(
+                                                "Redeemed (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Gain (₹)": st.column_config.NumberColumn(
+                                                "Gain (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Holding (days)": st.column_config.NumberColumn(
+                                                "Holding (days)",
+                                                format="%d"
+                                            )
+                                        }
+                                    )
                     else:
                         st.markdown("#### 📗 Long Term Capital Gains (LTCG)")
                         st.info("No long-term redemptions for this scheme in current FY")
@@ -2046,28 +2110,57 @@ elif active_tab is not None:
                                 if len(st_lots) > 0:
                                     lot_data = []
                                     for lot in st_lots:
-                                        # Format gain with color
-                                        gain_val = lot['gain']
-                                        if gain_val > 0:
-                                            gain_display = f"<span style='color: green;'>{format_indian_rupee_compact(gain_val)}</span>"
-                                        elif gain_val < 0:
-                                            gain_display = f"<span style='color: red;'>{format_indian_rupee_compact(gain_val)}</span>"
-                                        else:
-                                            gain_display = format_indian_rupee_compact(gain_val)
-                                        
                                         lot_data.append({
-                                            'Purchase Date': lot['purchase_date'].strftime('%d %b %Y'),
-                                            'Units': f"{lot['units']:.2f}",
-                                            'Buy Price': f"₹{lot['purchase_price']:.2f}",
-                                            'Sell Price': f"₹{txn['sell_price']:.2f}",
-                                            'Invested': format_indian_rupee_compact(lot['invested']),
-                                            'Redeemed': format_indian_rupee_compact(lot['redemption_value']),
-                                            'Gain': gain_display,
-                                            'Holding': f"{lot['holding_days']} days"
+                                            'Purchase Date': lot['purchase_date'],
+                                            'Units': lot['units'],
+                                            'Buy Price (₹)': lot['purchase_price'],
+                                            'Sell Price (₹)': txn['sell_price'],
+                                            'Invested (₹)': lot['invested'],
+                                            'Redeemed (₹)': lot['redemption_value'],
+                                            'Gain (₹)': lot['gain'],
+                                            'Holding (days)': lot['holding_days']
                                         })
                                     
                                     lot_df = pd.DataFrame(lot_data)
-                                    st.markdown(lot_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+                                    st.dataframe(
+                                        lot_df,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                        column_config={
+                                            "Purchase Date": st.column_config.DateColumn(
+                                                "Purchase Date",
+                                                format="DD MMM YYYY"
+                                            ),
+                                            "Units": st.column_config.NumberColumn(
+                                                "Units",
+                                                format="%.3f"
+                                            ),
+                                            "Buy Price (₹)": st.column_config.NumberColumn(
+                                                "Buy Price (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Sell Price (₹)": st.column_config.NumberColumn(
+                                                "Sell Price (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Invested (₹)": st.column_config.NumberColumn(
+                                                "Invested (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Redeemed (₹)": st.column_config.NumberColumn(
+                                                "Redeemed (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Gain (₹)": st.column_config.NumberColumn(
+                                                "Gain (₹)",
+                                                format="₹%.2f"
+                                            ),
+                                            "Holding (days)": st.column_config.NumberColumn(
+                                                "Holding (days)",
+                                                format="%d"
+                                            )
+                                        }
+                                    )
                     else:
                         st.markdown("#### 📕 Short Term Capital Gains (STCG)")
                         st.info("No short-term redemptions for this scheme in current FY")
