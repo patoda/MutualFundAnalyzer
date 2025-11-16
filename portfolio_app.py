@@ -546,7 +546,7 @@ def calculate_realized_gains_current_fy(transactions_df):
     detailed_data = []
     
     for scheme in schemes:
-        scheme_redemptions = redemptions[redemptions['scheme'] == scheme].sort_values('date')
+        scheme_redemptions_fy = redemptions[redemptions['scheme'] == scheme].sort_values('date')
         scheme_purchases = transactions_df[
             (transactions_df['scheme'] == scheme) &
             (transactions_df['units'] > 0) &  # units > 0 means purchase
@@ -555,6 +555,12 @@ def calculate_realized_gains_current_fy(transactions_df):
         
         if len(scheme_purchases) == 0:
             continue
+        
+        # Get ALL redemptions for this scheme (including past ones) to properly track lot consumption
+        all_scheme_redemptions = transactions_df[
+            (transactions_df['scheme'] == scheme) &
+            (transactions_df['units'] < 0)  # All redemptions
+        ].sort_values('date').copy()
         
         # Get fund type using classify_fund_type function
         fund_type, ltcg_days = classify_fund_type(scheme)
@@ -569,11 +575,28 @@ def calculate_realized_gains_current_fy(transactions_df):
                 'remaining_units': purchase['units']
             })
         
+        # First, reduce lot units based on ALL past redemptions (to get accurate remaining units)
+        for _, past_redemption in all_scheme_redemptions.iterrows():
+            if past_redemption['date'] < fy_start:
+                # Process past redemptions to reduce lot units, but don't calculate gains
+                sell_units = abs(past_redemption['units'])
+                remaining_to_consume = sell_units
+                
+                for lot in purchase_lots:
+                    if remaining_to_consume <= 0:
+                        break
+                    if lot['remaining_units'] > 0:
+                        units_consumed = min(remaining_to_consume, lot['remaining_units'])
+                        lot['remaining_units'] -= units_consumed
+                        remaining_to_consume -= units_consumed
+        
         scheme_ltcg = 0
         scheme_stcg = 0
+        scheme_invested = 0
+        scheme_redeemed = 0
         
-        # Process each redemption
-        for _, redemption in scheme_redemptions.iterrows():
+        # Now process current FY redemptions and calculate gains
+        for _, redemption in scheme_redemptions_fy.iterrows():
             sell_date = redemption['date']
             sell_units = abs(redemption['units'])  # Make positive (units are negative for redemptions)
             sell_price = redemption['price']
@@ -583,6 +606,8 @@ def calculate_realized_gains_current_fy(transactions_df):
             matched_lots = []
             txn_ltcg = 0
             txn_stcg = 0
+            txn_invested = 0
+            txn_redeemed = sell_value
             
             # Match with purchase lots (FIFO)
             for lot in purchase_lots:
@@ -601,6 +626,9 @@ def calculate_realized_gains_current_fy(transactions_df):
                     invested = units_from_lot * lot['price']
                     redemption_value = units_from_lot * sell_price
                     gain = redemption_value - invested
+                    
+                    # Track invested amount
+                    txn_invested += invested
                     
                     # Classify as LT or ST
                     if is_lt:
@@ -639,6 +667,8 @@ def calculate_realized_gains_current_fy(transactions_df):
             
             scheme_ltcg += txn_ltcg
             scheme_stcg += txn_stcg
+            scheme_invested += txn_invested
+            scheme_redeemed += txn_redeemed
         
         # Store summary for scheme
         summary_data.append({
@@ -647,7 +677,9 @@ def calculate_realized_gains_current_fy(transactions_df):
             'ltcg': scheme_ltcg,
             'stcg': scheme_stcg,
             'total_gain': scheme_ltcg + scheme_stcg,
-            'num_transactions': len(scheme_redemptions)
+            'invested': scheme_invested,
+            'redeemed': scheme_redeemed,
+            'num_transactions': len(scheme_redemptions_fy)
         })
     
     summary_df = pd.DataFrame(summary_data) if summary_data else None
@@ -1824,28 +1856,33 @@ elif active_tab is not None:
                 total_ltcg = realized_summary_df['ltcg'].sum()
                 total_stcg = realized_summary_df['stcg'].sum()
                 total_gain = total_ltcg + total_stcg
+                total_invested = realized_summary_df['invested'].sum()
+                total_redeemed = realized_summary_df['redeemed'].sum()
                 total_txns = realized_summary_df['num_transactions'].sum()
                 
                 # Show aggregate metrics
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                # Invested
+                col1.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Invested</div><div style='font-size: 28px; font-weight: 600; color: black;'>₹{format_indian_number(total_invested)}</div>", unsafe_allow_html=True)
+                
+                # Redeemed
+                col2.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Redeemed</div><div style='font-size: 28px; font-weight: 600; color: black;'>₹{format_indian_number(total_redeemed)}</div>", unsafe_allow_html=True)
                 
                 # LTCG metric with color coding
                 ltcg_color = "green" if total_ltcg > 0 else ("red" if total_ltcg < 0 else "black")
                 ltcg_display = f"₹{format_indian_number(total_ltcg)}" if total_ltcg >= 0 else f"-₹{format_indian_number(abs(total_ltcg))}"
-                col1.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total LTCG</div><div style='font-size: 36px; font-weight: 600; color: {ltcg_color};'>{ltcg_display}</div>", unsafe_allow_html=True)
+                col3.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>LTCG</div><div style='font-size: 28px; font-weight: 600; color: {ltcg_color};'>{ltcg_display}</div>", unsafe_allow_html=True)
                 
                 # STCG metric with color coding
                 stcg_color = "green" if total_stcg > 0 else ("red" if total_stcg < 0 else "black")
                 stcg_display = f"₹{format_indian_number(total_stcg)}" if total_stcg >= 0 else f"-₹{format_indian_number(abs(total_stcg))}"
-                col2.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total STCG</div><div style='font-size: 36px; font-weight: 600; color: {stcg_color};'>{stcg_display}</div>", unsafe_allow_html=True)
+                col4.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>STCG</div><div style='font-size: 28px; font-weight: 600; color: {stcg_color};'>{stcg_display}</div>", unsafe_allow_html=True)
                 
                 # Total gain with color coding
                 total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
                 total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
-                col3.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gains</div><div style='font-size: 36px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
-                
-                # Schemes count
-                col4.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Schemes</div><div style='font-size: 36px; font-weight: 600; color: black;'>{len(realized_summary_df)}</div>", unsafe_allow_html=True)
+                col5.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gain</div><div style='font-size: 28px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
                 
                 st.markdown("---")
                 
@@ -1853,6 +1890,10 @@ elif active_tab is not None:
                 display_summary = realized_summary_df.copy()
                 display_summary['Scheme'] = display_summary['scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
                 display_summary['Type'] = display_summary['fund_type'].str.upper()
+                
+                # Format amounts
+                display_summary['Invested'] = display_summary['invested'].apply(lambda x: f'₹{format_indian_number(x)}')
+                display_summary['Redeemed'] = display_summary['redeemed'].apply(lambda x: f'₹{format_indian_number(x)}')
                 
                 # Format with color coding for gains/losses
                 def format_gain_with_color(val):
@@ -1868,7 +1909,7 @@ elif active_tab is not None:
                 display_summary['Total Gain'] = display_summary['total_gain'].apply(lambda x: format_gain_with_color(x))
                 display_summary['Txns'] = display_summary['num_transactions'].astype(int)
                 
-                final_summary = display_summary[['Scheme', 'Type', 'LTCG', 'STCG', 'Total Gain', 'Txns']]
+                final_summary = display_summary[['Scheme', 'Type', 'Invested', 'Redeemed', 'LTCG', 'STCG', 'Total Gain', 'Txns']]
                 
                 # Display with HTML rendering for colors
                 st.markdown(final_summary.to_html(escape=False, index=False), unsafe_allow_html=True)
