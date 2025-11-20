@@ -146,6 +146,51 @@ def format_indian_number(value):
     
     return result
 
+
+def clean_fund_name(scheme_name):
+    """Remove former name from fund name (text after 'formerly'), plan type, and trailing hyphens."""
+    if 'formerly' in scheme_name.lower():
+        # Split on both lowercase and capitalized versions
+        scheme_name = scheme_name.split('formerly')[0].strip()
+        scheme_name = scheme_name.split('Formerly')[0].strip()
+        scheme_name = scheme_name.split('FORMERLY')[0].strip()
+    
+    # Remove plan type mentions (case insensitive)
+    scheme_lower = scheme_name.lower()
+    
+    # Common plan type patterns to remove (ordered by specificity - longest first)
+    plan_patterns = [
+        ' - direct plan growth option - ',
+        ' - direct plan growth - ',
+        ' - direct plan dividend - ',
+        ' - regular plan growth option - ',
+        ' - regular plan growth - ',
+        ' - regular plan dividend - ',
+        'direct plan growth option',
+        'direct plan growth',
+        'direct plan dividend',
+        'regular plan growth option',
+        'regular plan growth',
+        'regular plan dividend',
+        'growth option',
+        'dividend option',
+    ]
+    
+    for pattern in plan_patterns:
+        if pattern in scheme_lower:
+            # Find the position and remove it (case-insensitive)
+            idx = scheme_lower.find(pattern)
+            scheme_name = scheme_name[:idx] + scheme_name[idx + len(pattern):]
+            scheme_lower = scheme_name.lower()
+    
+    # Remove trailing hyphens and spaces
+    scheme_name = scheme_name.strip()
+    while scheme_name and (scheme_name.endswith('-') or scheme_name.endswith(' ')):
+        scheme_name = scheme_name.rstrip('- ').strip()
+    
+    return scheme_name
+
+
 def format_indian_rupee_compact(value):
     """
     Format rupees in Indian format for DataFrame display.
@@ -177,6 +222,11 @@ def classify_fund_type(scheme_name):
 
 def categorize_fund_by_name(scheme_name):
     """Categorize fund into detailed categories based on scheme name."""
+    # Remove text after "formerly" to ignore old fund names
+    if 'formerly' in scheme_name.lower():
+        scheme_name = scheme_name.split('formerly')[0].strip()
+        scheme_name = scheme_name.split('Formerly')[0].strip()
+    
     scheme_lower = scheme_name.lower()
     
     # Check for index funds first and categorize by underlying index
@@ -1715,8 +1765,9 @@ elif active_tab is not None:
                             scheme_cashflows.append((datetime.now(), scheme_value))
                         scheme_xirr = calculate_xirr(scheme_cashflows) if len(scheme_cashflows) > 1 else 0
                         
+                        clean_scheme = clean_fund_name(scheme)
                         fund_details.append({
-                            'Fund': scheme[:60] + '...' if len(scheme) > 60 else scheme,
+                            'Fund': clean_scheme[:60] + '...' if len(clean_scheme) > 60 else clean_scheme,
                             'Invested₹': scheme_invested,
                             'Value₹': scheme_value,
                             'Gain₹': scheme_gain,
@@ -1754,7 +1805,7 @@ elif active_tab is not None:
             
             # Shorten scheme names for visualization
             scheme_summary['short_name'] = scheme_summary['scheme'].apply(
-                lambda x: x[:40] + '...' if len(x) > 40 else x
+                lambda x: clean_fund_name(x)[:40] + '...' if len(clean_fund_name(x)) > 40 else clean_fund_name(x)
             )
             
             # Add formatted hover text
@@ -1839,7 +1890,7 @@ elif active_tab is not None:
                     st_units = st_lots['units'].sum()
                     
                     scheme_summary.append({
-                        'Scheme': scheme,
+                        'Scheme': clean_fund_name(scheme),
                         'Category': fund_category,
                         'Total Units': total_units,
                         'LT Units': lt_units,
@@ -1897,7 +1948,8 @@ elif active_tab is not None:
                     scheme_isins = data.get('scheme_isins', {})
                     scheme_isin = scheme_isins.get(selected_scheme, 'Not Available')
                     
-                    st.markdown(f"### {selected_scheme}")
+                    clean_scheme = clean_fund_name(selected_scheme)
+                    st.markdown(f"### {clean_scheme}")
                     st.markdown(f"**Fund Type:** {fund_type} | **Current NAV:** ₹{current_nav:.2f} | **ISIN:** `{scheme_isin}`")
                     
                     st.markdown("---")
@@ -2483,7 +2535,7 @@ elif active_tab is not None:
                         cumulative_invested = cumulative_value - cumulative_gain
                         
                         summary_data.append({
-                            'Scheme': scheme,
+                            'Scheme': clean_fund_name(scheme),
                             'Units to Redeem': cumulative_units,
                             'Redemption Value': cumulative_value,
                             'LTCG': cumulative_gain,
@@ -3035,7 +3087,7 @@ elif active_tab is not None:
                     fund_xirr = calculate_xirr(fund_cashflows) if len(fund_cashflows) > 1 else 0
                     
                     results.append({
-                        'Scheme': scheme,
+                        'Scheme': clean_fund_name(scheme),
                         'Allocated LTCG': cumulative_gain,
                         'Units to Sell': cumulative_units,
                         'Cost Basis': cumulative_invested,
