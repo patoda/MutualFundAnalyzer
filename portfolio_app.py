@@ -149,11 +149,15 @@ def format_indian_number(value):
 
 def clean_fund_name(scheme_name):
     """Remove former name from fund name (text after 'formerly'), plan type, and trailing hyphens."""
-    if 'formerly' in scheme_name.lower():
-        # Split on both lowercase and capitalized versions
-        scheme_name = scheme_name.split('formerly')[0].strip()
-        scheme_name = scheme_name.split('Formerly')[0].strip()
-        scheme_name = scheme_name.split('FORMERLY')[0].strip()
+    # Remove text after "formerly" or "erstwhile" to ignore old fund names
+    for keyword in ['formerly', 'erstwhile']:
+        if keyword in scheme_name.lower():
+            # Split case-insensitively
+            parts = scheme_name.lower().split(keyword)
+            # Find the position and keep only the part before it
+            idx = scheme_name.lower().find(keyword)
+            scheme_name = scheme_name[:idx].strip()
+            break
     
     # Remove plan type mentions (case insensitive)
     scheme_lower = scheme_name.lower()
@@ -191,10 +195,10 @@ def clean_fund_name(scheme_name):
     import re
     scheme_name = re.sub(r'\s*\([^)]*demat[^)]*\)', '', scheme_name, flags=re.IGNORECASE)
     
-    # Remove trailing hyphens and spaces
+    # Remove trailing hyphens, spaces, and incomplete parentheses
     scheme_name = scheme_name.strip()
-    while scheme_name and (scheme_name.endswith('-') or scheme_name.endswith(' ')):
-        scheme_name = scheme_name.rstrip('- ').strip()
+    while scheme_name and scheme_name[-1] in ['-', ' ', '(', ')']:
+        scheme_name = scheme_name.rstrip('- ()').strip()
     
     return scheme_name
 
