@@ -1694,7 +1694,7 @@ elif active_tab is not None:
                 with st.expander(f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | XIRR: {cat_row['xirr']:.1f}%)"):
                     # Build fund details for this category
                     fund_details = []
-                    for scheme in sorted(schemes_in_category):
+                    for scheme in schemes_in_category:
                         scheme_lots = category_lots[category_lots['scheme'] == scheme]
                         
                         scheme_invested = scheme_lots['invested'].sum()
@@ -1721,6 +1721,7 @@ elif active_tab is not None:
                     
                     # Display funds table
                     funds_df = pd.DataFrame(fund_details)
+                    funds_df = funds_df.sort_values('Value₹', ascending=False)
                     st.dataframe(
                         funds_df,
                         use_container_width=True,
@@ -1853,6 +1854,7 @@ elif active_tab is not None:
                 # Keep numeric values for proper sorting
                 final_df = display_df[['Scheme', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %', 'XIRR']].copy()
                 final_df.columns = ['Scheme', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']
+                final_df = final_df.sort_values('Value₹', ascending=False)
                 
                 st.dataframe(
                     final_df,
