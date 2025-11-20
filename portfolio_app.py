@@ -827,6 +827,18 @@ def calculate_realized_gains_current_fy(transactions_df):
             scheme_invested += txn_invested
             scheme_redeemed += txn_redeemed
         
+        # Calculate XIRR for realized gains
+        # Build cashflows from matched lots
+        scheme_cashflows = []
+        for detail in [d for d in detailed_data if d['scheme'] == scheme]:
+            for lot in detail['matched_lots']:
+                # Purchase: negative cashflow
+                scheme_cashflows.append((lot['purchase_date'], -lot['invested']))
+            # Redemption: positive cashflow
+            scheme_cashflows.append((detail['sell_date'], detail['sell_value']))
+        
+        scheme_xirr = calculate_xirr(scheme_cashflows) if len(scheme_cashflows) > 1 else 0
+        
         # Store summary for scheme
         summary_data.append({
             'scheme': scheme,
@@ -836,7 +848,8 @@ def calculate_realized_gains_current_fy(transactions_df):
             'total_gain': scheme_ltcg + scheme_stcg,
             'invested': scheme_invested,
             'redeemed': scheme_redeemed,
-            'num_transactions': len(scheme_redemptions_fy)
+            'num_transactions': len(scheme_redemptions_fy),
+            'xirr': scheme_xirr
         })
     
     summary_df = pd.DataFrame(summary_data) if summary_data else None
@@ -2180,9 +2193,10 @@ elif active_tab is not None:
                 display_summary['LTCG (₹)'] = display_summary['ltcg']
                 display_summary['STCG (₹)'] = display_summary['stcg']
                 display_summary['Total Gain (₹)'] = display_summary['total_gain']
+                display_summary['XIRR (%)'] = display_summary['xirr']
                 display_summary['Txns'] = display_summary['num_transactions'].astype(int)
                 
-                final_summary = display_summary[['Scheme', 'Type', 'Invested (₹)', 'Redeemed (₹)', 'LTCG (₹)', 'STCG (₹)', 'Total Gain (₹)', 'Txns']]
+                final_summary = display_summary[['Scheme', 'Type', 'Invested (₹)', 'Redeemed (₹)', 'LTCG (₹)', 'STCG (₹)', 'Total Gain (₹)', 'XIRR (%)', 'Txns']]
                 
                 # Display with dataframe for sortable columns
                 st.dataframe(
@@ -2209,6 +2223,10 @@ elif active_tab is not None:
                         "Total Gain (₹)": st.column_config.NumberColumn(
                             "Total Gain (₹)",
                             format="₹%.2f"
+                        ),
+                        "XIRR (%)": st.column_config.NumberColumn(
+                            "XIRR (%)",
+                            format="%.2f%%"
                         ),
                         "Txns": st.column_config.NumberColumn(
                             "Txns",
@@ -2255,16 +2273,20 @@ elif active_tab is not None:
                             scheme_invested += lot['invested']
                             scheme_redeemed += lot['redemption_value']
                     
+                    # Get XIRR from summary
+                    scheme_xirr = realized_summary_df[realized_summary_df['scheme'] == selected_scheme]['xirr'].iloc[0]
+                    
                     fund_type = scheme_details[0]['fund_type'].upper()
                     
                     # Quick summary bar
-                    col1, col2, col3, col4, col5 = st.columns(5)
+                    col1, col2, col3, col4, col5, col6 = st.columns(6)
                     
                     invested_display = f"₹{format_indian_number(scheme_invested)}"
                     redeemed_display = f"₹{format_indian_number(scheme_redeemed)}"
                     ltcg_display = f"₹{format_indian_number(scheme_ltcg)}" if scheme_ltcg >= 0 else f"-₹{format_indian_number(abs(scheme_ltcg))}"
                     stcg_display = f"₹{format_indian_number(scheme_stcg)}" if scheme_stcg >= 0 else f"-₹{format_indian_number(abs(scheme_stcg))}"
                     total_display = f"₹{format_indian_number(scheme_total)}" if scheme_total >= 0 else f"-₹{format_indian_number(abs(scheme_total))}"
+                    xirr_display = f"{scheme_xirr:.2f}%"
                     
                     # Color-coded metrics
                     with col1:
@@ -2289,6 +2311,11 @@ elif active_tab is not None:
                         st.markdown("**Total Gain**")
                         total_color = "green" if scheme_total > 0 else ("red" if scheme_total < 0 else "inherit")
                         st.markdown(f"<h3 style='color: {total_color}; margin-top: 0;'>{total_display}</h3>", unsafe_allow_html=True)
+                    
+                    with col6:
+                        st.markdown("**XIRR**")
+                        xirr_color = "green" if scheme_xirr > 0 else ("red" if scheme_xirr < 0 else "inherit")
+                        st.markdown(f"<h3 style='color: {xirr_color}; margin-top: 0;'>{xirr_display}</h3>", unsafe_allow_html=True)
                     
                     st.markdown("---")
                     
