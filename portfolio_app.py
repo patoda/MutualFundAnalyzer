@@ -2167,8 +2167,8 @@ elif active_tab is not None:
                     details = next((d for d in realized_details_list if d['scheme'] == row['scheme']), None)
                     if details:
                         for lot in details['matched_lots']:
-                            all_cashflows.append((lot['purchase_date'], -lot['invested_amount']))
-                            all_cashflows.append((lot['sell_date'], lot['sell_value']))
+                            all_cashflows.append((lot['purchase_date'], -lot['invested']))
+                            all_cashflows.append((details['sell_date'], lot['redemption_value']))
                 
                 total_xirr = calculate_xirr(all_cashflows) if all_cashflows else 0.0
                 
