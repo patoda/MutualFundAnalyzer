@@ -181,10 +181,16 @@ def clean_fund_name(scheme_name):
     ]
     
     for pattern in patterns_to_remove:
-        scheme_name = re.sub(pattern, '', scheme_name, flags=re.IGNORECASE)
+        scheme_name = re.sub(pattern, ' ', scheme_name, flags=re.IGNORECASE)
+    
+    # Clean up leftover "PLAN" that might remain (like "FUNDPLAN" -> "FUND PLAN" -> "FUND")
+    scheme_name = re.sub(r'\s*plan\s*$', '', scheme_name, flags=re.IGNORECASE)
     
     # Remove (Non-Demat), (Demat), and similar parenthetical notes
     scheme_name = re.sub(r'\s*\([^)]*demat[^)]*\)', '', scheme_name, flags=re.IGNORECASE)
+    
+    # Clean up multiple spaces
+    scheme_name = re.sub(r'\s+', ' ', scheme_name)
     
     # Remove trailing hyphens, spaces, and incomplete parentheses
     scheme_name = scheme_name.strip()
@@ -2159,7 +2165,7 @@ elif active_tab is not None:
                 
                 # Format summary table
                 display_summary = realized_summary_df.copy()
-                display_summary['Scheme'] = display_summary['scheme'].apply(lambda x: x[:50] + '...' if len(x) > 50 else x)
+                display_summary['Scheme'] = display_summary['scheme'].apply(lambda x: clean_fund_name(x)[:50] + '...' if len(clean_fund_name(x)) > 50 else clean_fund_name(x))
                 display_summary['Type'] = display_summary['fund_type'].str.upper()
                 
                 # Keep numeric values for sorting, format for display
