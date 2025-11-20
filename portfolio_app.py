@@ -1744,12 +1744,12 @@ elif active_tab is not None:
             category_display = category_summary.copy()
             
             # Keep numeric columns for proper sorting in dataframe
-            category_display_df = category_display[['fund_category', 'current_value', 'invested', 'percentage', 'xirr']].copy()
+            category_display_df = category_display[['fund_category', 'xirr', 'current_value', 'invested', 'percentage']].copy()
             category_display_df['gain'] = category_display_df['current_value'] - category_display_df['invested']
             category_display_df['gain_pct'] = (category_display_df['gain'] / category_display_df['invested'] * 100)
             
             # Rename columns for display
-            category_display_df.columns = ['Category', 'Value₹', 'Invested₹', 'Portfolio%', 'XIRR%', 'Gain₹', 'Gain%']
+            category_display_df.columns = ['Category', 'XIRR%', 'Value₹', 'Invested₹', 'Portfolio%', 'Gain₹', 'Gain%']
             
             st.dataframe(
                 category_display_df,
@@ -1757,12 +1757,12 @@ elif active_tab is not None:
                 hide_index=True,
                 column_config={
                     "Category": st.column_config.TextColumn("Category", width="medium"),
+                    "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                     "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
                     "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
                     "Portfolio%": st.column_config.NumberColumn("Portfolio%", format="%.1f%%", width="small", help="Percentage of total portfolio"),
                     "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
                     "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
-                    "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                 }
             )
             
@@ -1801,11 +1801,11 @@ elif active_tab is not None:
                         clean_scheme = clean_fund_name(scheme)
                         fund_details.append({
                             'Fund': clean_scheme[:60] + '...' if len(clean_scheme) > 60 else clean_scheme,
+                            'XIRR%': scheme_xirr,
                             'Invested₹': scheme_invested,
                             'Value₹': scheme_value,
                             'Gain₹': scheme_gain,
-                            'Gain%': scheme_gain_pct,
-                            'XIRR%': scheme_xirr
+                            'Gain%': scheme_gain_pct
                         })
                     
                     # Display funds table
@@ -1817,11 +1817,11 @@ elif active_tab is not None:
                         hide_index=True,
                         column_config={
                             "Fund": st.column_config.TextColumn("Fund", width="large"),
+                            "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                             "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
                             "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
                             "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
                             "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
-                            "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                         }
                     )
             
@@ -1941,8 +1941,8 @@ elif active_tab is not None:
                 display_df = summary_df.copy()
                 display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:45] + '...' if len(x) > 45 else x)
                 # Keep numeric values for proper sorting
-                final_df = display_df[['Scheme', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %', 'XIRR']].copy()
-                final_df.columns = ['Scheme', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']
+                final_df = display_df[['Scheme', 'XIRR', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %']].copy()
+                final_df.columns = ['Scheme', 'XIRR%', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%']
                 final_df = final_df.sort_values('Value₹', ascending=False)
                 
                 st.dataframe(
@@ -1952,6 +1952,7 @@ elif active_tab is not None:
                     height=400,
                     column_config={
                         "Scheme": st.column_config.TextColumn("Scheme", width="large"),
+                        "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                         "Category": st.column_config.TextColumn("Category", width="medium"),
                         "Units": st.column_config.NumberColumn("Units", format="%.0f", width="small"),
                         "LT": st.column_config.NumberColumn("LT", format="%.0f", width="small"),
@@ -1960,7 +1961,6 @@ elif active_tab is not None:
                         "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
                         "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
                         "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
-                        "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
                     }
                 )
                 
@@ -2051,22 +2051,22 @@ elif active_tab is not None:
                             
                             # Show LT lots - keep numeric for sorting
                             lt_display = lt_lots.sort_values('purchase_date').copy()
-                            lt_display_df = lt_display[['purchase_date', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'cagr', 'holding_days']].copy()
+                            lt_display_df = lt_display[['purchase_date', 'cagr', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'holding_days']].copy()
                             lt_display_df['gain_pct'] = lt_display_df['gain_pct'] * 100  # Convert to percentage
-                            lt_display_df.columns = ['Date', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'CAGR%', 'Days']
+                            lt_display_df.columns = ['Date', 'CAGR%', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'Days']
                             
                             st.dataframe(
                                 lt_display_df,
                                 hide_index=True,
                                 column_config={
                                     "Date": st.column_config.DateColumn("Date", format="DD-MMM-YY"),
+                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
                                     "Units": st.column_config.NumberColumn("Units", format="%.1f"),
                                     "Buy₹": st.column_config.NumberColumn("Buy₹", format="%.1f"),
                                     "Inv₹": st.column_config.NumberColumn("Inv₹", format="₹%.0f"),
                                     "Val₹": st.column_config.NumberColumn("Val₹", format="₹%.0f"),
                                     "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f"),
                                     "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%"),
-                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
                                     "Days": st.column_config.NumberColumn("Days", format="%.0f")
                                 }
                             )
@@ -2103,22 +2103,22 @@ elif active_tab is not None:
                             
                             # Show ST lots - keep numeric for sorting
                             st_display = st_lots.sort_values('purchase_date').copy()
-                            st_display_df = st_display[['purchase_date', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'cagr', 'holding_days']].copy()
+                            st_display_df = st_display[['purchase_date', 'cagr', 'units', 'purchase_price', 'invested', 'current_value', 'gain_loss', 'gain_pct', 'holding_days']].copy()
                             st_display_df['gain_pct'] = st_display_df['gain_pct'] * 100  # Convert to percentage
-                            st_display_df.columns = ['Date', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'CAGR%', 'Days']
+                            st_display_df.columns = ['Date', 'CAGR%', 'Units', 'Buy₹', 'Inv₹', 'Val₹', 'Gain₹', 'Gain%', 'Days']
                             
                             st.dataframe(
                                 st_display_df,
                                 hide_index=True,
                                 column_config={
                                     "Date": st.column_config.DateColumn("Date", format="DD-MMM-YY"),
+                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
                                     "Units": st.column_config.NumberColumn("Units", format="%.1f"),
                                     "Buy₹": st.column_config.NumberColumn("Buy₹", format="%.1f"),
                                     "Inv₹": st.column_config.NumberColumn("Inv₹", format="₹%.0f"),
                                     "Val₹": st.column_config.NumberColumn("Val₹", format="₹%.0f"),
                                     "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f"),
                                     "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%"),
-                                    "CAGR%": st.column_config.NumberColumn("CAGR%", format="%.1f%%"),
                                     "Days": st.column_config.NumberColumn("Days", format="%.0f")
                                 }
                             )
