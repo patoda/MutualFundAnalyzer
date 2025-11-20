@@ -162,6 +162,12 @@ def clean_fund_name(scheme_name):
     # Remove plan type and growth/dividend patterns using regex (case insensitive)
     # This handles various combinations like "Direct Plan Growth", "Direct Growth", "--Growth", etc.
     patterns_to_remove = [
+        r'\s*-*\s*\(\s*direct\s+plan\s+growth\s+option\s*\)*\s*-*',
+        r'\s*-*\s*\(\s*direct\s+plan\s+dividend\s+option\s*\)*\s*-*',
+        r'\s*-*\s*\(\s*direct\s+plan\s+growth\s*\)*\s*-*',
+        r'\s*-*\s*\(\s*direct\s+plan\s+dividend\s*\)*\s*-*',
+        r'\s*-*\s*\(\s*direct\s+plan\s*\)*\s*-*',
+        r'\s*-*\s*\(\s*direct\s*\)*\s*-*',
         r'\s*-*\s*direct\s+plan\s+growth\s+option\s*-*',
         r'\s*-*\s*direct\s+plan\s+dividend\s+option\s*-*',
         r'\s*-*\s*direct\s+plan\s+growth\s*-*',
