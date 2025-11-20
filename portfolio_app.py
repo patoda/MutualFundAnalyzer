@@ -252,7 +252,7 @@ def categorize_fund_by_name(scheme_name):
         return 'Small Cap'
     
     # Multi/Flexi Cap Index (Nifty 500, Nifty 200, etc.)
-    if any(kw in scheme_lower for kw in ['nifty 500', 'nifty 200']):
+    if any(kw in scheme_lower for kw in ['nifty 500', 'nifty500', 'nifty 200', 'nifty200']):
         return 'Multi/Flexi Cap'
     
     # Large & Mid Cap (check before individual Large Cap or Mid Cap)
