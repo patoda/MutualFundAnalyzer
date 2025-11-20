@@ -163,15 +163,19 @@ def clean_fund_name(scheme_name):
         ' - direct plan growth option - ',
         ' - direct plan growth - ',
         ' - direct plan dividend - ',
+        ' - direct plan - ',
         ' - regular plan growth option - ',
         ' - regular plan growth - ',
         ' - regular plan dividend - ',
+        ' - regular plan - ',
         'direct plan growth option',
         'direct plan growth',
         'direct plan dividend',
+        'direct plan',
         'regular plan growth option',
         'regular plan growth',
         'regular plan dividend',
+        'regular plan',
         'growth option',
         'dividend option',
     ]
@@ -182,6 +186,10 @@ def clean_fund_name(scheme_name):
             idx = scheme_lower.find(pattern)
             scheme_name = scheme_name[:idx] + scheme_name[idx + len(pattern):]
             scheme_lower = scheme_name.lower()
+    
+    # Remove (Non-Demat), (Demat), and similar parenthetical notes
+    import re
+    scheme_name = re.sub(r'\s*\([^)]*demat[^)]*\)', '', scheme_name, flags=re.IGNORECASE)
     
     # Remove trailing hyphens and spaces
     scheme_name = scheme_name.strip()
