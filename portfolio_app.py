@@ -1616,17 +1616,15 @@ elif active_tab is not None:
             category_summary_list = []
             for category in lots_df['fund_category'].unique():
                 category_lots = lots_df[lots_df['fund_category'] == category]
-                category_txns = transactions_df[transactions_df['scheme'].isin(category_lots['scheme'].unique())]
                 
                 cat_invested = category_lots['invested'].sum()
                 cat_value = category_lots['current_value'].sum()
                 cat_percentage = (cat_value / total_value * 100)
                 
-                # Calculate XIRR for this category
+                # Calculate XIRR for this category using ONLY current holdings (FIFO-adjusted)
                 cat_cashflows = []
-                for _, txn in category_txns.iterrows():
-                    if txn['amount'] != 0:
-                        cat_cashflows.append((txn['date'], -txn['amount']))
+                for _, lot in category_lots.iterrows():
+                    cat_cashflows.append((lot['purchase_date'], -lot['invested']))
                 if cat_value > 0:
                     cat_cashflows.append((datetime.now(), cat_value))
                 cat_xirr = calculate_xirr(cat_cashflows) if len(cat_cashflows) > 1 else 0
@@ -1752,7 +1750,6 @@ elif active_tab is not None:
                 scheme_summary = []
                 for scheme in sorted(lots_df['scheme'].unique()):
                     scheme_lots = lots_df[lots_df['scheme'] == scheme]
-                    scheme_txns = transactions_df[transactions_df['scheme'] == scheme]
                     
                     total_units = scheme_lots['units'].sum()
                     total_invested = scheme_lots['invested'].sum()
@@ -1763,11 +1760,10 @@ elif active_tab is not None:
                     # Get granular category instead of generic fund type
                     fund_category = categorize_fund_by_name(scheme)
                     
-                    # Calculate XIRR for scheme
+                    # Calculate XIRR for scheme using ONLY current holdings (FIFO-adjusted)
                     cashflows = []
-                    for _, txn in scheme_txns.iterrows():
-                        if txn['amount'] != 0:
-                            cashflows.append((txn['date'], -txn['amount']))
+                    for _, lot in scheme_lots.iterrows():
+                        cashflows.append((lot['purchase_date'], -lot['invested']))
                     if total_value > 0:
                         cashflows.append((datetime.now(), total_value))
                     xirr = calculate_xirr(cashflows) if len(cashflows) > 1 else 0
@@ -1849,12 +1845,10 @@ elif active_tab is not None:
                     total_gain = total_value - total_invested
                     gain_pct = (total_gain / total_invested * 100) if total_invested > 0 else 0
                     
-                    # Calculate XIRR for total scheme
-                    scheme_txns = transactions_df[transactions_df['scheme'] == selected_scheme]
+                    # Calculate XIRR for total scheme using ONLY current holdings (FIFO-adjusted)
                     cashflows = []
-                    for _, txn in scheme_txns.iterrows():
-                        if txn['amount'] != 0:
-                            cashflows.append((txn['date'], -txn['amount']))
+                    for _, lot in scheme_lots.iterrows():
+                        cashflows.append((lot['purchase_date'], -lot['invested']))
                     if total_value > 0:
                         cashflows.append((datetime.now(), total_value))
                     total_xirr = calculate_xirr(cashflows) if len(cashflows) > 1 else 0
@@ -1884,12 +1878,10 @@ elif active_tab is not None:
                         lt_gain = lt_value - lt_invested
                         lt_gain_pct = (lt_gain / lt_invested * 100) if lt_invested > 0 else 0
                         
-                        # Calculate XIRR for LT lots only
-                        lt_purchase_dates = set(lt_lots['purchase_date'].dt.date)
+                        # Calculate XIRR for LT lots only using FIFO-adjusted holdings
                         lt_cashflows = []
-                        for _, txn in scheme_txns.iterrows():
-                            if txn['amount'] != 0 and txn['date'].date() in lt_purchase_dates:
-                                lt_cashflows.append((txn['date'], -txn['amount']))
+                        for _, lot in lt_lots.iterrows():
+                            lt_cashflows.append((lot['purchase_date'], -lot['invested']))
                         if lt_value > 0:
                             lt_cashflows.append((datetime.now(), lt_value))
                         lt_xirr = calculate_xirr(lt_cashflows) if len(lt_cashflows) > 1 else 0
@@ -1938,12 +1930,10 @@ elif active_tab is not None:
                         st_gain = st_value - st_invested
                         st_gain_pct = (st_gain / st_invested * 100) if st_invested > 0 else 0
                         
-                        # Calculate XIRR for ST lots only
-                        st_purchase_dates = set(st_lots['purchase_date'].dt.date)
+                        # Calculate XIRR for ST lots only using FIFO-adjusted holdings
                         st_cashflows = []
-                        for _, txn in scheme_txns.iterrows():
-                            if txn['amount'] != 0 and txn['date'].date() in st_purchase_dates:
-                                st_cashflows.append((txn['date'], -txn['amount']))
+                        for _, lot in st_lots.iterrows():
+                            st_cashflows.append((lot['purchase_date'], -lot['invested']))
                         if st_value > 0:
                             st_cashflows.append((datetime.now(), st_value))
                         st_xirr = calculate_xirr(st_cashflows) if len(st_cashflows) > 1 else 0
