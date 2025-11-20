@@ -149,58 +149,41 @@ def format_indian_number(value):
 
 def clean_fund_name(scheme_name):
     """Remove former name from fund name (text after 'formerly'), plan type, and trailing hyphens."""
+    import re
+    
     # Remove text after "formerly" or "erstwhile" to ignore old fund names
     for keyword in ['formerly', 'erstwhile']:
         if keyword in scheme_name.lower():
             # Split case-insensitively
-            parts = scheme_name.lower().split(keyword)
-            # Find the position and keep only the part before it
             idx = scheme_name.lower().find(keyword)
             scheme_name = scheme_name[:idx].strip()
             break
     
-    # Remove plan type mentions (case insensitive)
-    scheme_lower = scheme_name.lower()
-    
-    # Common plan type patterns to remove (ordered by specificity - longest first)
-    plan_patterns = [
-        ' - direct plan growth option - ',
-        ' - direct plan growth - ',
-        ' - direct plan dividend - ',
-        ' - direct plan - ',
-        ' - direct growth',
-        ' - direct dividend',
-        ' - regular plan growth option - ',
-        ' - regular plan growth - ',
-        ' - regular plan dividend - ',
-        ' - regular plan - ',
-        '--growth',
-        '--dividend',
-        'direct plan growth option',
-        'direct plan growth',
-        'direct plan dividend',
-        'direct plan',
-        'direct growth',
-        'direct dividend',
-        'regular plan growth option',
-        'regular plan growth',
-        'regular plan dividend',
-        'regular plan',
-        'growth option',
-        'dividend option',
-        ' growth',
-        ' dividend',
+    # Remove plan type and growth/dividend patterns using regex (case insensitive)
+    # This handles various combinations like "Direct Plan Growth", "Direct Growth", "--Growth", etc.
+    patterns_to_remove = [
+        r'\s*-*\s*direct\s+plan\s+growth\s+option\s*-*',
+        r'\s*-*\s*direct\s+plan\s+dividend\s+option\s*-*',
+        r'\s*-*\s*direct\s+plan\s+growth\s*-*',
+        r'\s*-*\s*direct\s+plan\s+dividend\s*-*',
+        r'\s*-*\s*direct\s+plan\s*-*',
+        r'\s*-*\s*regular\s+plan\s+growth\s+option\s*-*',
+        r'\s*-*\s*regular\s+plan\s+dividend\s+option\s*-*',
+        r'\s*-*\s*regular\s+plan\s+growth\s*-*',
+        r'\s*-*\s*regular\s+plan\s+dividend\s*-*',
+        r'\s*-*\s*regular\s+plan\s*-*',
+        r'\s*-*\s*direct\s+growth\s*-*',
+        r'\s*-*\s*direct\s+dividend\s*-*',
+        r'\s*-*\s*growth\s+option\s*-*',
+        r'\s*-*\s*dividend\s+option\s*-*',
+        r'\s*-*\s*growth\s*-*',
+        r'\s*-*\s*dividend\s*-*',
     ]
     
-    for pattern in plan_patterns:
-        if pattern in scheme_lower:
-            # Find the position and remove it (case-insensitive)
-            idx = scheme_lower.find(pattern)
-            scheme_name = scheme_name[:idx] + scheme_name[idx + len(pattern):]
-            scheme_lower = scheme_name.lower()
+    for pattern in patterns_to_remove:
+        scheme_name = re.sub(pattern, '', scheme_name, flags=re.IGNORECASE)
     
     # Remove (Non-Demat), (Demat), and similar parenthetical notes
-    import re
     scheme_name = re.sub(r'\s*\([^)]*demat[^)]*\)', '', scheme_name, flags=re.IGNORECASE)
     
     # Remove trailing hyphens, spaces, and incomplete parentheses
