@@ -175,6 +175,87 @@ def classify_fund_type(scheme_name):
     return 'equity', 365  # 12 months = 1 year in days
 
 
+def categorize_fund_by_name(scheme_name):
+    """Categorize fund into detailed categories based on scheme name."""
+    scheme_lower = scheme_name.lower()
+    
+    # Check for index funds first and categorize by underlying index
+    # Large Cap Index
+    if any(kw in scheme_lower for kw in ['nifty 50', 'sensex', 'nifty50', 'nifty next 50']):
+        return 'Large Cap'
+    
+    # Mid Cap Index
+    if any(kw in scheme_lower for kw in ['nifty midcap', 'nifty mid cap']):
+        return 'Mid Cap'
+    
+    # Small Cap Index
+    if any(kw in scheme_lower for kw in ['nifty smallcap', 'nifty small cap']):
+        return 'Small Cap'
+    
+    # Multi/Flexi Cap Index (Nifty 500, Nifty 200, etc.)
+    if any(kw in scheme_lower for kw in ['nifty 500', 'nifty 200', 'nifty100', 'nifty 100']):
+        return 'Multi/Flexi Cap'
+    
+    # Large Cap (active funds)
+    if any(kw in scheme_lower for kw in ['large cap', 'blue chip', 'top 100']):
+        return 'Large Cap'
+    
+    # Mid Cap (active funds)
+    if any(kw in scheme_lower for kw in ['mid cap', 'midcap']):
+        return 'Mid Cap'
+    
+    # Small Cap (active funds)
+    if any(kw in scheme_lower for kw in ['small cap', 'smallcap']):
+        return 'Small Cap'
+    
+    # Multi Cap / Flexi Cap (active funds)
+    if any(kw in scheme_lower for kw in ['multi cap', 'multicap', 'flexi cap', 'flexicap']):
+        return 'Multi/Flexi Cap'
+    
+    # Strategy-Based Funds (Focused, Contra, Value)
+    if any(kw in scheme_lower for kw in ['focused', 'focussed', 'focus fund', 'contra', 'contrarian', 'value fund', 'value']):
+        return 'Strategy (Focused/Contra/Value)'
+    
+    # Tech Funds
+    if any(kw in scheme_lower for kw in ['digital', 'technology', 'tech fund', 'it index']):
+        return 'Tech'
+    
+    # Sectoral / Thematic
+    if any(kw in scheme_lower for kw in ['sectoral', 'sector', 'banking', 'pharma', 
+                                          'infra', 'energy', 'fmcg', 'auto', 'healthcare', 
+                                          'consumption', 'manufacturing', 'psu', 'infrastructure']):
+        return 'Sectoral/Thematic'
+    
+    # Balanced / Hybrid
+    if any(kw in scheme_lower for kw in ['balanced', 'hybrid', 'aggressive', 'conservative']):
+        return 'Hybrid/Balanced'
+    
+    # International
+    if any(kw in scheme_lower for kw in ['international', 'global', 'foreign', 'overseas', 
+                                          'world', 'us equity', 'nasdaq', 'emerging market', 'china', 
+                                          'asian', 'u.s.', 'u.s ', 'usa']):
+        return 'International'
+    
+    # Debt
+    if any(kw in scheme_lower for kw in ['liquid', 'ultra short', 'low duration', 'money market', 
+                                          'overnight', 'gilt', 'debt', 'bond', 'income', 'credit', 
+                                          'banking & psu', 'corporate bond', 'dynamic bond', 
+                                          'floating rate', 'short duration', 'medium duration', 
+                                          'long duration']):
+        return 'Debt'
+    
+    # ELSS (Tax Saving)
+    if any(kw in scheme_lower for kw in ['elss', 'tax saver', 'tax saving']):
+        return 'ELSS'
+    
+    # Generic index/ETF that didn't match above - categorize as Other Equity
+    if any(kw in scheme_lower for kw in ['index', 'etf']):
+        return 'Other Equity'
+    
+    # Default: Other Equity
+    return 'Other Equity'
+
+
 def calculate_xirr(cashflows):
     """Calculate XIRR (annualized return) from cashflows. Returns percentage."""
     if len(cashflows) < 2:
@@ -1518,6 +1599,81 @@ elif active_tab is not None:
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True)
             
+            # Fund Type Distribution
+            st.markdown("---")
+            st.subheader("📊 Portfolio Distribution by Fund Type")
+            
+            # Categorize each holding
+            lots_df['fund_category'] = lots_df['scheme'].apply(categorize_fund_by_name)
+            
+            # Group by fund category and calculate XIRR per category
+            category_summary_list = []
+            for category in lots_df['fund_category'].unique():
+                category_lots = lots_df[lots_df['fund_category'] == category]
+                category_txns = transactions_df[transactions_df['scheme'].isin(category_lots['scheme'].unique())]
+                
+                cat_invested = category_lots['invested'].sum()
+                cat_value = category_lots['current_value'].sum()
+                cat_percentage = (cat_value / total_value * 100)
+                
+                # Calculate XIRR for this category
+                cat_cashflows = []
+                for _, txn in category_txns.iterrows():
+                    if txn['amount'] != 0:
+                        cat_cashflows.append((txn['date'], -txn['amount']))
+                if cat_value > 0:
+                    cat_cashflows.append((datetime.now(), cat_value))
+                cat_xirr = calculate_xirr(cat_cashflows) if len(cat_cashflows) > 1 else 0
+                
+                category_summary_list.append({
+                    'fund_category': category,
+                    'invested': cat_invested,
+                    'current_value': cat_value,
+                    'percentage': cat_percentage,
+                    'xirr': cat_xirr
+                })
+            
+            category_summary = pd.DataFrame(category_summary_list)
+            category_summary = category_summary.sort_values('current_value', ascending=False)
+            
+            # Pie chart for fund type distribution
+            fig_category = go.Figure(data=[go.Pie(
+                labels=category_summary['fund_category'],
+                values=category_summary['current_value'],
+                hole=0.3,
+                textinfo='label+percent',
+                hovertemplate='<b>%{label}</b><br>Value: ₹%{value:,.0f}<br>Percentage: %{percent}<extra></extra>'
+            )])
+            fig_category.update_layout(height=450, showlegend=True)
+            st.plotly_chart(fig_category, use_container_width=True)
+            
+            # Table with fund type breakdown - shown separately below chart
+            st.markdown("### Category-wise Performance")
+            category_display = category_summary.copy()
+            
+            # Keep numeric columns for proper sorting in dataframe
+            category_display_df = category_display[['fund_category', 'current_value', 'invested', 'percentage', 'xirr']].copy()
+            category_display_df['gain'] = category_display_df['current_value'] - category_display_df['invested']
+            category_display_df['gain_pct'] = (category_display_df['gain'] / category_display_df['invested'] * 100)
+            
+            # Rename columns for display
+            category_display_df.columns = ['Category', 'Value₹', 'Invested₹', 'Portfolio%', 'XIRR%', 'Gain₹', 'Gain%']
+            
+            st.dataframe(
+                category_display_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Category": st.column_config.TextColumn("Category", width="medium"),
+                    "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
+                    "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
+                    "Portfolio%": st.column_config.NumberColumn("Portfolio%", format="%.1f%%", width="small", help="Percentage of total portfolio"),
+                    "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
+                    "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
+                    "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
+                }
+            )
+            
             # Top holdings
             st.markdown("---")
             st.subheader("Top 10 Holdings by Value")
@@ -1598,7 +1754,8 @@ elif active_tab is not None:
                     total_gain = total_value - total_invested
                     gain_pct = (total_gain / total_invested * 100) if total_invested > 0 else 0
                     
-                    fund_type = scheme_lots.iloc[0]['fund_type'].upper()
+                    # Get granular category instead of generic fund type
+                    fund_category = categorize_fund_by_name(scheme)
                     
                     # Calculate XIRR for scheme
                     cashflows = []
@@ -1618,7 +1775,7 @@ elif active_tab is not None:
                     
                     scheme_summary.append({
                         'Scheme': scheme,
-                        'Fund Type': fund_type,
+                        'Category': fund_category,
                         'Total Units': total_units,
                         'LT Units': lt_units,
                         'ST Units': st_units,
@@ -1634,10 +1791,9 @@ elif active_tab is not None:
                 # Shorten scheme names and format for display
                 display_df = summary_df.copy()
                 display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:45] + '...' if len(x) > 45 else x)
-                display_df['Type'] = display_df['Fund Type']
                 # Keep numeric values for proper sorting
-                final_df = display_df[['Scheme', 'Type', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %', 'XIRR']].copy()
-                final_df.columns = ['Scheme', 'Type', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']
+                final_df = display_df[['Scheme', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %', 'XIRR']].copy()
+                final_df.columns = ['Scheme', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%', 'XIRR%']
                 
                 st.dataframe(
                     final_df,
@@ -1646,7 +1802,7 @@ elif active_tab is not None:
                     height=400,
                     column_config={
                         "Scheme": st.column_config.TextColumn("Scheme", width="large"),
-                        "Type": st.column_config.TextColumn("Type", width="small"),
+                        "Category": st.column_config.TextColumn("Category", width="medium"),
                         "Units": st.column_config.NumberColumn("Units", format="%.0f", width="small"),
                         "LT": st.column_config.NumberColumn("LT", format="%.0f", width="small"),
                         "ST": st.column_config.NumberColumn("ST", format="%.0f", width="small"),
