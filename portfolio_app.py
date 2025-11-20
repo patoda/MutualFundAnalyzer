@@ -221,10 +221,16 @@ def categorize_fund_by_name(scheme_name):
         return 'Tech'
     
     # Sectoral / Thematic
-    if any(kw in scheme_lower for kw in ['sectoral', 'sector', 'banking', 'pharma', 
+    if any(kw in scheme_lower for kw in ['sectoral', 'sector', 'banking', 'bank', 'pharma', 
                                           'infra', 'energy', 'fmcg', 'auto', 'healthcare', 
-                                          'consumption', 'manufacturing', 'psu', 'infrastructure']):
+                                          'consumption', 'manufacturing', 'psu', 'infrastructure',
+                                          'innovation', 'innovative', 'defence', 'defense']):
         return 'Sectoral/Thematic'
+    
+    # Multi Asset Allocation
+    if any(kw in scheme_lower for kw in ['multi asset', 'multi-asset', 'asset allocation', 
+                                          'dynamic asset']):
+        return 'Multi Asset Allocation'
     
     # Balanced / Hybrid
     if any(kw in scheme_lower for kw in ['balanced', 'hybrid', 'aggressive', 'conservative']):
