@@ -1678,6 +1678,63 @@ elif active_tab is not None:
                 }
             )
             
+            # Expandable sections for each category showing funds
+            st.markdown("---")
+            st.markdown("### 📂 Funds by Category")
+            
+            # Sort categories by value for display
+            for _, cat_row in category_summary.sort_values('current_value', ascending=False).iterrows():
+                category = cat_row['fund_category']
+                category_lots = lots_df[lots_df['fund_category'] == category]
+                
+                # Get unique schemes in this category
+                schemes_in_category = category_lots['scheme'].unique()
+                
+                # Create expandable section for each category
+                with st.expander(f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | XIRR: {cat_row['xirr']:.1f}%)"):
+                    # Build fund details for this category
+                    fund_details = []
+                    for scheme in sorted(schemes_in_category):
+                        scheme_lots = category_lots[category_lots['scheme'] == scheme]
+                        
+                        scheme_invested = scheme_lots['invested'].sum()
+                        scheme_value = scheme_lots['current_value'].sum()
+                        scheme_gain = scheme_value - scheme_invested
+                        scheme_gain_pct = (scheme_gain / scheme_invested * 100) if scheme_invested > 0 else 0
+                        
+                        # Calculate XIRR for this scheme
+                        scheme_cashflows = []
+                        for _, lot in scheme_lots.iterrows():
+                            scheme_cashflows.append((lot['purchase_date'], -lot['invested']))
+                        if scheme_value > 0:
+                            scheme_cashflows.append((datetime.now(), scheme_value))
+                        scheme_xirr = calculate_xirr(scheme_cashflows) if len(scheme_cashflows) > 1 else 0
+                        
+                        fund_details.append({
+                            'Fund': scheme[:60] + '...' if len(scheme) > 60 else scheme,
+                            'Invested₹': scheme_invested,
+                            'Value₹': scheme_value,
+                            'Gain₹': scheme_gain,
+                            'Gain%': scheme_gain_pct,
+                            'XIRR%': scheme_xirr
+                        })
+                    
+                    # Display funds table
+                    funds_df = pd.DataFrame(fund_details)
+                    st.dataframe(
+                        funds_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Fund": st.column_config.TextColumn("Fund", width="large"),
+                            "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
+                            "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
+                            "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
+                            "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
+                            "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
+                        }
+                    )
+            
             # Top holdings
             st.markdown("---")
             st.subheader("Top 10 Holdings by Value")
