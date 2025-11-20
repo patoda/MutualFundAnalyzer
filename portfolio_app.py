@@ -290,6 +290,11 @@ def categorize_fund_by_name(scheme_name):
     if any(kw in scheme_lower for kw in ['digital', 'technology', 'tech fund', 'it index']):
         return 'Tech'
     
+    # Commodities (Gold/Silver/Metal Funds - check before general Sectoral/Thematic)
+    if any(kw in scheme_lower for kw in ['gold', 'silver', 'metal', 'precious metal', 
+                                          'bullion', 'commodity']):
+        return 'Commodities'
+    
     # Sectoral / Thematic
     if any(kw in scheme_lower for kw in ['sectoral', 'sector', 'banking', 'bank', 'pharma', 
                                           'infra', 'energy', 'fmcg', 'auto', 'healthcare', 
