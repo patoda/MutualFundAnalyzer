@@ -2156,8 +2156,19 @@ elif active_tab is not None:
                 total_redeemed = realized_summary_df['redeemed'].sum()
                 total_txns = realized_summary_df['num_transactions'].sum()
                 
+                # Calculate overall XIRR from all realized transactions
+                all_cashflows = []
+                for _, row in realized_summary_df.iterrows():
+                    details = next((d for d in realized_details_list if d['scheme'] == row['scheme']), None)
+                    if details:
+                        for lot in details['matched_lots']:
+                            all_cashflows.append((lot['purchase_date'], -lot['invested_amount']))
+                            all_cashflows.append((lot['sell_date'], lot['sell_value']))
+                
+                total_xirr = calculate_xirr(all_cashflows) if all_cashflows else 0.0
+                
                 # Show aggregate metrics
-                col1, col2, col3, col4, col5 = st.columns(5)
+                col1, col2, col3, col4, col5, col6 = st.columns(6)
                 
                 # Invested
                 col1.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Invested</div><div style='font-size: 28px; font-weight: 600; color: black;'>₹{format_indian_number(total_invested)}</div>", unsafe_allow_html=True)
@@ -2179,6 +2190,11 @@ elif active_tab is not None:
                 total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
                 total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
                 col5.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gain</div><div style='font-size: 28px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
+                
+                # XIRR metric with color coding
+                xirr_color = "green" if total_xirr > 0 else ("red" if total_xirr < 0 else "black")
+                xirr_display = f"{total_xirr:.2f}%"
+                col6.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>XIRR</div><div style='font-size: 28px; font-weight: 600; color: {xirr_color};'>{xirr_display}</div>", unsafe_allow_html=True)
                 
                 st.markdown("---")
                 
