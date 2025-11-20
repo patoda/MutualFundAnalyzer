@@ -284,7 +284,7 @@ def categorize_fund_by_name(scheme_name):
     
     # Strategy-Based Funds (Focused, Contra, Value)
     if any(kw in scheme_lower for kw in ['focused', 'focussed', 'focus fund', 'contra', 'contrarian', 'value fund', 'value']):
-        return 'Strategy (Focused/Contra/Value)'
+        return 'Strategic Funds'
     
     # Tech Funds
     if any(kw in scheme_lower for kw in ['digital', 'technology', 'tech fund', 'it index']):
