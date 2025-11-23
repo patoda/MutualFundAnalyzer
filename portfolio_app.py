@@ -1779,7 +1779,7 @@ elif active_tab is not None:
                 schemes_in_category = category_lots['scheme'].unique()
                 
                 # Create expandable section for each category
-                with st.expander(f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | XIRR: {cat_row['xirr']:.1f}%)"):
+                with st.expander(f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | {cat_row['percentage']:.1f}% | XIRR: {cat_row['xirr']:.1f}%)"):
                     # Build fund details for this category
                     fund_details = []
                     for scheme in schemes_in_category:
