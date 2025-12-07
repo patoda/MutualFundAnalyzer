@@ -1329,8 +1329,8 @@ st.markdown("---")
 # Tab names - no longer includes Landing Page
 tab_names = ["📊 Portfolio Overview", "📋 All Holdings", "💼 Realized Gains", "💰 Single-Scheme Tax Harvest", "🎯 Multi-Fund Strategy"]
 
-# Show radio buttons only when NOT on landing page AND data is processed
-if not st.session_state.show_landing and st.session_state.processed_data is not None:
+# Show radio buttons only when in mutual funds mode, NOT on landing page AND data is processed
+if st.session_state.get('app_mode') == 'mutual_funds' and not st.session_state.show_landing and st.session_state.processed_data is not None:
     # Ensure nav_radio matches active_tab when active_tab is changed programmatically
     if 'nav_radio' in st.session_state and st.session_state.nav_radio != st.session_state.active_tab:
         st.session_state.nav_radio = st.session_state.active_tab
@@ -1352,222 +1352,590 @@ else:
     # On landing page or no data - force landing view
     active_tab = None
 
-# LANDING PAGE
-if active_tab is None:
-    # Upload section with better styling
-    col1, col2 = st.columns([2, 1])
+# Check app mode
+app_mode = st.session_state.get('app_mode')
+
+# XIRR CALCULATOR MODE - Completely separate from mutual funds
+if app_mode == 'xirr_calculator':
+    # Add back button to return to landing page
+    if st.button("← Back to Home"):
+        st.session_state.app_mode = None
+        st.rerun()
+    
+    st.header("📈 Fidelity XIRR Calculator")
+    st.markdown("Upload CSV files to calculate XIRR for open or closed lots")
+    
+    # Create columns for file uploads
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📤 Step 1: Upload Your CAS PDF")
-        uploaded_pdf = st.file_uploader(
-            "Choose your Consolidated Account Statement (CAS) PDF file", 
-            type=['pdf'], 
-            help="Upload the CAS PDF file you received from CAMS/Karvy via email",
-            label_visibility="collapsed"
-        )
-        
-        # Track file changes - clear processed data ONLY when a different file is uploaded
-        if uploaded_pdf is not None:
-            current_file_id = f"{uploaded_pdf.name}_{uploaded_pdf.size}"
-            
-            # Check if this is a different file than before
-            if 'last_uploaded_file_id' in st.session_state:
-                if st.session_state.last_uploaded_file_id != current_file_id:
-                    # Different file uploaded - clear old data AND cache
-                    st.session_state.processed_data = None
-                    st.session_state.nav_histories = None  # Clear NAV cache
-                    st.session_state.nav_cache_key = None  # Clear cache key
-                    st.cache_data.clear()  # Clear Streamlit's cache
-                    st.session_state.last_uploaded_file_id = current_file_id
-                    st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
-            else:
-                # First file upload
-                st.session_state.last_uploaded_file_id = current_file_id
-                st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
+        st.subheader("Open Lots")
+        open_lots_file = st.file_uploader("Upload Open Lots CSV", type=['csv'], key='open_lots')
         
     with col2:
-        st.markdown("### 🔐 Step 2: Enter Password")
-        password = st.text_input(
-            "PDF Password (if any)", 
-            type="password", 
-            help="Enter the password from your email. Leave blank if your PDF is not password protected",
-            placeholder="Leave blank if no password",
-            label_visibility="collapsed"
-        )
+        st.subheader("Closed Lots")
+        closed_lots_file = st.file_uploader("Upload Closed Lots CSV", type=['csv'], key='closed_lots')
     
-    # Process button with enhanced styling
-    st.markdown("<br>", unsafe_allow_html=True)
-    process_clicked = False
-    if uploaded_pdf:
-        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-        with col_btn2:
-            process_clicked = st.button(
-                "🚀 Process & Analyze Portfolio", 
-                type="primary", 
-                use_container_width=True,
-                help="Click to parse the CAS PDF and generate portfolio analytics"
-            )
-    
-    # Process PDF when button is clicked
-    if process_clicked and uploaded_pdf:
-        # Clear cache before processing to ensure fresh data
-        st.cache_data.clear()
-        
-        # Enhanced progress indicators
-        progress_text = st.empty()
-        progress_bar = st.progress(0)
-        
-        progress_text.markdown("🔍 **Reading PDF file...**")
-        progress_bar.progress(20)
-        
-        # Reset file pointer to beginning
-        uploaded_pdf.seek(0)
-        
-        # Read file bytes
-        pdf_bytes = uploaded_pdf.read()
+    # Process Open Lots
+    if open_lots_file is not None:
+        st.markdown("---")
+        st.subheader("🟢 Open Lots Analysis")
         
         try:
-            progress_text.markdown("📊 **Extracting transactions...**")
-            progress_bar.progress(40)
+            # Read the CSV file
+            open_df = pd.read_csv(open_lots_file)
             
-            # Process PDF - use None if password is empty
-            pdf_password = password if password else None
+            # Clean column names
+            open_df.columns = open_df.columns.str.strip()
             
-            with st.spinner("💼 Calculating FIFO lots..."):
-                progress_bar.progress(60)
-                data = process_pdf(pdf_bytes, pdf_password)
+            # Remove footer rows (empty row and "The values are displayed in..." row)
+            open_df = open_df[open_df['Date acquired'].notna()].copy()
+            open_df = open_df[~open_df['Date acquired'].astype(str).str.contains('values are displayed', case=False, na=False)].copy()
             
-            progress_text.markdown("✨ **Finalizing analytics...**")
-            progress_bar.progress(80)
+            # Parse dates and prepare cashflows
+            # Date acquired format: "Dec-01-2025"
+            open_df['Date acquired'] = pd.to_datetime(open_df['Date acquired'], format='%b-%d-%Y', errors='coerce')
             
-            # Check what we got
-            if data is None:
-                progress_bar.empty()
-                progress_text.empty()
-                st.error("❌ **📄 No valid CAS data found! This doesn't appear to be a valid Consolidated Account Statement. Please ensure you uploaded the correct PDF.**")
-            elif 'lots_df' not in data or len(data['lots_df']) == 0:
-                progress_bar.empty()
-                progress_text.empty()
-                st.error("❌ **📄 No holdings found in CAS! The PDF was processed but no current holdings were found. You may have zero balance in all schemes.**")
-            elif 'transactions_df' not in data or len(data['transactions_df']) == 0:
-                progress_bar.empty()
-                progress_text.empty()
-                st.error("❌ **📄 No transactions found in CAS! The PDF format might not be supported.**")
+            # Current date for valuation
+            current_date = datetime.now()
+            
+            # Calculate CAGR for each lot
+            def calculate_cagr_for_lot(row):
+                if pd.isna(row['Date acquired']):
+                    return 0
+                try:
+                    days = (current_date - row['Date acquired']).days
+                    years = days / 365.25
+                    if years <= 0 or row['Cost basis'] <= 0:
+                        return 0
+                    cagr = ((row['Value'] / row['Cost basis']) ** (1 / years) - 1) * 100
+                    return cagr
+                except:
+                    return 0
+            
+            open_df['CAGR%'] = open_df.apply(calculate_cagr_for_lot, axis=1).round(2)
+            
+            # Calculate Gain% for each lot
+            open_df['Gain%'] = ((open_df['Value'] - open_df['Cost basis']) / open_df['Cost basis'] * 100).round(2)
+            
+            # Display raw data with formatted dates
+            with st.expander("📋 View Raw Data"):
+                display_df = open_df.copy()
+                display_df['Date acquired'] = display_df['Date acquired'].dt.strftime('%Y-%m-%d')
+                # Remove unnecessary columns
+                cols_to_remove = ['Sale availability date', 'Transfer availability date', 'Grant date']
+                display_df = display_df.drop(columns=[col for col in cols_to_remove if col in display_df.columns])
+                
+                # Round numeric columns to 2 decimal places
+                numeric_cols = ['Gain/loss', 'Gain%', 'CAGR%', 'Cost basis', 'Cost basis/share', 'Value']
+                for col in numeric_cols:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].round(2)
+                
+                st.dataframe(display_df, use_container_width=True)
+            
+            # Calculate Overall XIRR
+            st.markdown("### 1️⃣ Overall XIRR")
+            overall_cashflows = []
+            total_invested = 0
+            total_value = 0
+            
+            for _, row in open_df.iterrows():
+                if pd.notna(row['Date acquired']) and pd.notna(row['Cost basis']):
+                    # Outflow on purchase date
+                    overall_cashflows.append((row['Date acquired'], -float(row['Cost basis'])))
+                    total_invested += float(row['Cost basis'])
+                    total_value += float(row['Value'])
+            
+            # Inflow on current date (current value)
+            overall_cashflows.append((current_date, total_value))
+            
+            overall_xirr = calculate_xirr(overall_cashflows) if len(overall_cashflows) > 1 else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Invested", f"${total_invested:,.2f}")
+            col2.metric("Current Value", f"${total_value:,.2f}")
+            col3.metric("Gain/Loss", f"${total_value - total_invested:,.2f}")
+            col4.metric("Overall XIRR", f"{overall_xirr:.2f}%")
+            
+            # Calculate XIRR for DO shares
+            st.markdown("### 2️⃣ XIRR for Share Source = DO")
+            do_df = open_df[open_df['Share source'].str.upper() == 'DO'].copy()
+            
+            if len(do_df) > 0:
+                do_cashflows = []
+                do_invested = 0
+                do_value = 0
+                
+                for _, row in do_df.iterrows():
+                    if pd.notna(row['Date acquired']) and pd.notna(row['Cost basis']):
+                        do_cashflows.append((row['Date acquired'], -float(row['Cost basis'])))
+                        do_invested += float(row['Cost basis'])
+                        do_value += float(row['Value'])
+                
+                do_cashflows.append((current_date, do_value))
+                do_xirr = calculate_xirr(do_cashflows) if len(do_cashflows) > 1 else 0
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("DO Invested", f"${do_invested:,.2f}")
+                col2.metric("DO Value", f"${do_value:,.2f}")
+                col3.metric("DO Gain/Loss", f"${do_value - do_invested:,.2f}")
+                col4.metric("DO XIRR", f"{do_xirr:.2f}%")
             else:
-                progress_bar.progress(100)
-                progress_text.markdown("✅ **Processing complete!**")
-                time.sleep(0.5)
+                st.info("No DO (Direct Offering) shares found in the data")
+            
+            # Calculate XIRR for SP shares
+            st.markdown("### 3️⃣ XIRR for Share Source = SP")
+            sp_df = open_df[open_df['Share source'].str.upper() == 'SP'].copy()
+            
+            if len(sp_df) > 0:
+                sp_cashflows = []
+                sp_invested = 0
+                sp_value = 0
                 
-                # Store in session state
-                st.session_state.processed_data = data
+                for _, row in sp_df.iterrows():
+                    if pd.notna(row['Date acquired']) and pd.notna(row['Cost basis']):
+                        sp_cashflows.append((row['Date acquired'], -float(row['Cost basis'])))
+                        sp_invested += float(row['Cost basis'])
+                        sp_value += float(row['Value'])
                 
-                # Show success with stats
-                st.success(f"""
-                ✅ **Portfolio Loaded Successfully!**
-                - 📈 **{len(data['transactions_df'])}** transactions processed
-                - 🏦 **{data['lots_df']['scheme'].nunique()}** unique schemes
-                - 📦 **{len(data['lots_df'])}** FIFO lots tracked
-                - 💰 **₹{data['lots_df']['current_value'].sum()/100000:.2f}L** total portfolio value
-                """)
+                sp_cashflows.append((current_date, sp_value))
+                sp_xirr = calculate_xirr(sp_cashflows) if len(sp_cashflows) > 1 else 0
                 
-                # Switch to Portfolio Overview and hide landing page
-                st.session_state.show_landing = False
-                st.session_state.active_tab = 0  # Portfolio Overview is now index 0
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("SP Invested", f"${sp_invested:,.2f}")
+                col2.metric("SP Value", f"${sp_value:,.2f}")
+                col3.metric("SP Gain/Loss", f"${sp_value - sp_invested:,.2f}")
+                col4.metric("SP XIRR", f"{sp_xirr:.2f}%")
                 
-                time.sleep(1)
-                # Rerun to show radio buttons and portfolio
-                st.rerun()
-                    
+                # Calculate XIRR for SP shares without 10% discount
+                st.markdown("### 4️⃣ XIRR for Share Source = SP (Without 10% Discount)")
+                st.info("Adjusting cost basis to remove 10% discount (multiplying by 1.111...)")
+                
+                sp_no_discount_cashflows = []
+                sp_no_discount_invested = 0
+                
+                for _, row in sp_df.iterrows():
+                    if pd.notna(row['Date acquired']) and pd.notna(row['Cost basis']):
+                        # Remove 10% discount: if paid X, original price was X / 0.9 = X * (10/9)
+                        adjusted_cost = float(row['Cost basis']) * (10/9)
+                        sp_no_discount_cashflows.append((row['Date acquired'], -adjusted_cost))
+                        sp_no_discount_invested += adjusted_cost
+                
+                sp_no_discount_cashflows.append((current_date, sp_value))
+                sp_no_discount_xirr = calculate_xirr(sp_no_discount_cashflows) if len(sp_no_discount_cashflows) > 1 else 0
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("SP Adjusted Invested", f"${sp_no_discount_invested:,.2f}")
+                col2.metric("SP Value", f"${sp_value:,.2f}")
+                col3.metric("SP Adjusted Gain/Loss", f"${sp_value - sp_no_discount_invested:,.2f}")
+                col4.metric("SP XIRR (No Discount)", f"{sp_no_discount_xirr:.2f}%")
+                
+            else:
+                st.info("No SP (Stock Purchase) shares found in the data")
+            
         except Exception as e:
-                # Handle any errors during processing
-                error_msg = str(e)
-                exception_type = type(e).__name__
+            st.error(f"Error processing open lots: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+    
+    # Process Closed Lots
+    if closed_lots_file is not None:
+        st.markdown("---")
+        st.subheader("🔴 Closed Lots Analysis")
+        
+        try:
+            # Read the CSV file - the header has HTML with commas, so we need special handling
+            # First, read just to see the raw structure
+            import io
+            closed_lots_file.seek(0)
+            content = closed_lots_file.read().decode('utf-8')
+            
+            # Find the header line and clean it
+            lines = content.split('\n')
+            if len(lines) > 0:
+                # Clean the header - remove HTML tags before parsing
+                import re
+                header_line = lines[0]
+                # Replace the problematic HTML column with a simple name
+                header_line = re.sub(r'<span[^>]*>([^<]*)</span>', r'\1', header_line)
                 
-                # Check for password-related errors
-                password_keywords = [
-                    "password", "decrypt", "encrypted", "authentication", 
-                    "incorrect password", "file has not been decrypted",
-                    "pdferror", "owner password", "user password",
-                    "not allowed", "encrypted pdf", "permissionerror"
-                ]
+                # Reconstruct the CSV with cleaned header
+                cleaned_content = header_line + '\n' + '\n'.join(lines[1:])
                 
-                # Check for invalid format errors
-                format_keywords = [
-                    "index", "list index", "keyerror", "attributeerror",
-                    "nonetype", "pages", "extract_text"
-                ]
+                # Now read with pandas
+                closed_df = pd.read_csv(io.StringIO(cleaned_content))
+            else:
+                closed_df = pd.read_csv(closed_lots_file)
+            
+            # Clean column names
+            closed_df.columns = closed_df.columns.str.strip()
+            
+            # Remove footer rows (empty row and "The values are displayed in..." row)
+            closed_df = closed_df[closed_df['Date acquired'].notna()].copy()
+            closed_df = closed_df[~closed_df['Date acquired'].astype(str).str.contains('values are displayed', case=False, na=False)].copy()
+            
+            # Parse dates - format is "FEB/18/2020" (uppercase month)
+            def parse_date_with_upper_month(date_str):
+                if pd.isna(date_str):
+                    return pd.NaT
+                try:
+                    # Handle format like "FEB/18/2020"
+                    return pd.to_datetime(date_str, format='%b/%d/%Y')
+                except:
+                    try:
+                        # Try with uppercase format
+                        from datetime import datetime
+                        return datetime.strptime(str(date_str).upper(), '%b/%d/%Y'.upper())
+                    except:
+                        return pd.NaT
+            
+            closed_df['Date acquired'] = closed_df['Date acquired'].apply(parse_date_with_upper_month)
+            
+            # Find the date sold column
+            date_sold_col = [col for col in closed_df.columns if 'sold' in col.lower() or 'transferred' in col.lower()]
+            
+            if date_sold_col:
+                # Parse the date sold column
+                closed_df['Date sold'] = closed_df[date_sold_col[0]].apply(parse_date_with_upper_month)
+            
+            # Calculate CAGR for each lot
+            def calculate_cagr_for_closed_lot(row):
+                if pd.isna(row['Date acquired']) or pd.isna(row.get('Date sold')):
+                    return 0
+                try:
+                    days = (row['Date sold'] - row['Date acquired']).days
+                    years = days / 365.25
+                    if years <= 0 or row['Cost basis'] <= 0:
+                        return 0
+                    cagr = ((row['Proceeds'] / row['Cost basis']) ** (1 / years) - 1) * 100
+                    return cagr
+                except:
+                    return 0
+            
+            closed_df['CAGR%'] = closed_df.apply(calculate_cagr_for_closed_lot, axis=1).round(2)
+            
+            # Calculate Gain% for each lot
+            closed_df['Gain%'] = ((closed_df['Proceeds'] - closed_df['Cost basis']) / closed_df['Cost basis'] * 100).round(2)
+            
+            # Display raw data with formatted dates
+            with st.expander("📋 View Raw Data"):
+                display_df = closed_df.copy()
+                display_df['Date acquired'] = display_df['Date acquired'].dt.strftime('%Y-%m-%d')
+                # Remove the redundant 'Date sold' column if it exists
+                if 'Date sold' in display_df.columns:
+                    display_df = display_df.drop(columns=['Date sold'])
                 
-                # Determine error type
-                is_password_error = (
-                    exception_type in ["PdfminerException", "PermissionError", "PdfReadError"] or
-                    any(keyword in error_msg.lower() for keyword in password_keywords) or
-                    any(keyword in exception_type.lower() for keyword in ["permission", "password", "decrypt"]) or
-                    (exception_type == "PdfminerException" and len(error_msg.strip()) < 5)
+                # Round numeric columns to 2 decimal places
+                numeric_cols = ['Gain/loss', 'Gain%', 'CAGR%', 'Cost basis', 'Proceeds', 'Quantity']
+                for col in numeric_cols:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].round(2)
+                
+                st.dataframe(display_df, use_container_width=True)
+            
+            # Calculate XIRR for closed lots
+            st.markdown("### XIRR for Closed Lots")
+            
+            closed_cashflows = []
+            total_cost = 0
+            total_proceeds = 0
+            
+            for idx, row in closed_df.iterrows():
+                date_acq = row['Date acquired']
+                date_sold = row.get('Date sold')
+                
+                if pd.notna(date_acq) and pd.notna(date_sold):
+                    # Outflow on purchase
+                    cost = float(row['Cost basis'])
+                    proceeds = float(row['Proceeds'])
+                    
+                    closed_cashflows.append((date_acq, -cost))
+                    closed_cashflows.append((date_sold, proceeds))
+                    
+                    total_cost += cost
+                    total_proceeds += proceeds
+            
+            closed_xirr = calculate_xirr(closed_cashflows) if len(closed_cashflows) > 0 else 0
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("Total Transactions", f"{len(closed_df)}")
+            col2.metric("Total Cost", f"${total_cost:,.2f}")
+            col3.metric("Total Proceeds", f"${total_proceeds:,.2f}")
+            col4.metric("Total Gain", f"${total_proceeds - total_cost:,.2f}")
+            col5.metric("XIRR", f"{closed_xirr:.2f}%")
+            
+            # Show distribution by term
+            if 'Term' in closed_df.columns:
+                st.markdown("### Breakdown by Term")
+                term_summary = closed_df.groupby('Term').agg({
+                    'Cost basis': 'sum',
+                    'Proceeds': 'sum',
+                    'Gain/loss': 'sum',
+                    'Quantity': 'sum'
+                }).reset_index()
+                
+                term_summary.columns = ['Term', 'Total Cost', 'Total Proceeds', 'Total Gain/Loss', 'Total Quantity']
+                
+                st.dataframe(
+                    term_summary,
+                    hide_index=True,
+                    column_config={
+                        "Total Cost": st.column_config.NumberColumn("Total Cost", format="$%.2f"),
+                        "Total Proceeds": st.column_config.NumberColumn("Total Proceeds", format="$%.2f"),
+                        "Total Gain/Loss": st.column_config.NumberColumn("Total Gain/Loss", format="$%.2f"),
+                        "Total Quantity": st.column_config.NumberColumn("Total Quantity", format="%.4f"),
+                    },
+                    use_container_width=True
                 )
-                
-                is_format_error = (
-                    exception_type in ["IndexError", "KeyError", "AttributeError", "TypeError"] or
-                    any(keyword in error_msg.lower() for keyword in format_keywords)
-                )
-                
-                if is_password_error:
-                    st.error("❌ **🔒 WRONG PASSWORD!** The password you entered is incorrect. Please check your email for the correct password.")
-                    st.warning("💡 **Tip:** Check your email for the correct password. It's usually sent along with the CAS PDF link.")
-                elif is_format_error:
-                    st.error("❌ **📄 Invalid File Format!** This doesn't appear to be a valid CAS (Consolidated Account Statement) PDF. Please upload a CAS statement from CAMS/Karvy.")
-                else:
-                    st.error(f"❌ **⚠️ Error:** {exception_type} - {error_msg if error_msg else 'Unknown error'}")
+            
+        except Exception as e:
+            st.error(f"Error processing closed lots: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+    
+    if open_lots_file is None and closed_lots_file is None:
+        st.info("👆 Please upload at least one CSV file to calculate XIRR")
+    
+    # Show donation banner at bottom
+    show_donation_banner()
+
+# LANDING PAGE
+elif active_tab is None:
+    # Show choice between Mutual Fund Analysis and XIRR Calculator
+    st.markdown("### 🎯 What would you like to do?")
+    
+    choice_col1, choice_col2 = st.columns(2)
+    
+    with choice_col1:
+        if st.button("📊 Mutual Fund Portfolio Analysis", type="primary", use_container_width=True, help="Analyze your mutual fund portfolio using CAS PDF"):
+            st.session_state.app_mode = "mutual_funds"
+            st.rerun()
+    
+    with choice_col2:
+        if st.button("📈 Fidelity XIRR Calculator", type="secondary", use_container_width=True, help="Calculate XIRR for stock lots (open/closed)"):
+            st.session_state.app_mode = "xirr_calculator"
+            st.session_state.show_landing = False
+            st.rerun()
     
     st.markdown("---")
     
-    # Show appropriate content on landing page
-    if st.session_state.processed_data is not None and not process_clicked:
-        # Data has been processed and we're back on landing page
-        st.success("✅ **Portfolio data loaded!**")
+    # Check if user has made a choice
+    if app_mode == "mutual_funds":
+        # Upload section with better styling
+        col1, col2 = st.columns([2, 1])
         
-        data = st.session_state.processed_data
-        st.info(f"📊 Loaded: {len(data['transactions_df'])} transactions | {data['lots_df']['scheme'].nunique()} schemes | {len(data['lots_df'])} lots")
+        with col1:
+            st.markdown("### 📤 Step 1: Upload Your CAS PDF")
+            uploaded_pdf = st.file_uploader(
+                "Choose your Consolidated Account Statement (CAS) PDF file", 
+                type=['pdf'], 
+                help="Upload the CAS PDF file you received from CAMS/Karvy via email",
+                label_visibility="collapsed"
+            )
+            
+            # Track file changes - clear processed data ONLY when a different file is uploaded
+            if uploaded_pdf is not None:
+                current_file_id = f"{uploaded_pdf.name}_{uploaded_pdf.size}"
+                
+                # Check if this is a different file than before
+                if 'last_uploaded_file_id' in st.session_state:
+                    if st.session_state.last_uploaded_file_id != current_file_id:
+                        # Different file uploaded - clear old data AND cache
+                        st.session_state.processed_data = None
+                        st.session_state.nav_histories = None  # Clear NAV cache
+                        st.session_state.nav_cache_key = None  # Clear cache key
+                        st.cache_data.clear()  # Clear Streamlit's cache
+                        st.session_state.last_uploaded_file_id = current_file_id
+                        st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
+                else:
+                    # First file upload
+                    st.session_state.last_uploaded_file_id = current_file_id
+                    st.success(f"✅ File uploaded: **{uploaded_pdf.name}** ({uploaded_pdf.size / 1024:.1f} KB)")
+            
+        with col2:
+            st.markdown("### 🔐 Step 2: Enter Password")
+            password = st.text_input(
+                "PDF Password (if any)", 
+                type="password", 
+                help="Enter the password from your email. Leave blank if your PDF is not password protected",
+                placeholder="Leave blank if no password",
+                label_visibility="collapsed"
+            )
         
-        st.write("📌 **Use the navigation tabs above to explore your portfolio, or upload a new file to replace current data.**")
-    else:
-        # Show welcome screen when no file uploaded or currently processing
-        st.subheader("Welcome! 👋")
+        # Process button with enhanced styling
+        st.markdown("<br>", unsafe_allow_html=True)
+        process_clicked = False
+        if uploaded_pdf:
+            col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+            with col_btn2:
+                process_clicked = st.button(
+                    "🚀 Process & Analyze Portfolio", 
+                    type="primary", 
+                    use_container_width=True,
+                    help="Click to parse the CAS PDF and generate portfolio analytics"
+                )
         
-        st.write("This tool helps you analyze your mutual fund portfolio and optimize tax harvesting strategies.")
-        
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%); 
-                    padding: 1.5rem; border-radius: 0.75rem; border-left: 4px solid rgba(102, 126, 234, 0.6); margin: 1rem 0;">
-            <h4 style="margin: 0 0 1rem 0; color: rgba(102, 126, 234, 1);">📋 How to get your CAS (Consolidated Account Statement):</h4>
-            <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
-                <li>Visit <a href="https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement" target="_blank" style="color: rgba(102, 126, 234, 1); text-decoration: none; font-weight: 500;">CAMS website</a> to download "CAS - CAMS+KFintech" statement</li>
-                <li>For statement type, select <strong>"Detailed (Includes transaction listing)"</strong></li>
-                <li>For Period, select <strong>"Specific Period"</strong></li>
-                <li>In From Date, select a date far in the past since the inception of your investments</li>
-                <li>In To Date, select latest date (today)</li>
-                <li>In Folio Listing, select <strong>"Transacted folios and folios with balanceinfo"</strong></li>
-                <li>Enter your email ID registered with mutual funds</li>
-                <li>Choose a password for your CAS PDF</li>
-                <li>Submit and check your email</li>
-                <li>You'll receive the PDF with password in the email</li>
-                <li>Upload that PDF here!</li>
-            </ol>
-        </div>
-        """, unsafe_allow_html=True)
+        # Process PDF when button is clicked
+        if process_clicked and uploaded_pdf:
+            # Clear cache before processing to ensure fresh data
+            st.cache_data.clear()
+            
+            # Enhanced progress indicators
+            progress_text = st.empty()
+            progress_bar = st.progress(0)
+            
+            progress_text.markdown("🔍 **Reading PDF file...**")
+            progress_bar.progress(20)
+            
+            # Reset file pointer to beginning
+            uploaded_pdf.seek(0)
+            
+            # Read file bytes
+            pdf_bytes = uploaded_pdf.read()
+            
+            try:
+                progress_text.markdown("📊 **Extracting transactions...**")
+                progress_bar.progress(40)
+                
+                # Process PDF - use None if password is empty
+                pdf_password = password if password else None
+                
+                with st.spinner("💼 Calculating FIFO lots..."):
+                    progress_bar.progress(60)
+                    data = process_pdf(pdf_bytes, pdf_password)
+                
+                progress_text.markdown("✨ **Finalizing analytics...**")
+                progress_bar.progress(80)
+                
+                # Check what we got
+                if data is None:
+                    progress_bar.empty()
+                    progress_text.empty()
+                    st.error("❌ **📄 No valid CAS data found! This doesn't appear to be a valid Consolidated Account Statement. Please ensure you uploaded the correct PDF.**")
+                elif 'lots_df' not in data or len(data['lots_df']) == 0:
+                    progress_bar.empty()
+                    progress_text.empty()
+                    st.error("❌ **📄 No holdings found in CAS! The PDF was processed but no current holdings were found. You may have zero balance in all schemes.**")
+                elif 'transactions_df' not in data or len(data['transactions_df']) == 0:
+                    progress_bar.empty()
+                    progress_text.empty()
+                    st.error("❌ **📄 No transactions found in CAS! The PDF format might not be supported.**")
+                else:
+                    progress_bar.progress(100)
+                    progress_text.markdown("✅ **Processing complete!**")
+                    time.sleep(0.5)
+                    
+                    # Store in session state
+                    st.session_state.processed_data = data
+                    
+                    # Show success with stats
+                    st.success(f"""
+                    ✅ **Portfolio Loaded Successfully!**
+                    - 📈 **{len(data['transactions_df'])}** transactions processed
+                    - 🏦 **{data['lots_df']['scheme'].nunique()}** unique schemes
+                    - 📦 **{len(data['lots_df'])}** FIFO lots tracked
+                    - 💰 **₹{data['lots_df']['current_value'].sum()/100000:.2f}L** total portfolio value
+                    """)
+                    
+                    # Switch to Portfolio Overview and hide landing page
+                    st.session_state.show_landing = False
+                    st.session_state.active_tab = 0  # Portfolio Overview is now index 0
+                    
+                    time.sleep(1)
+                    # Rerun to show radio buttons and portfolio
+                    st.rerun()
+                        
+            except Exception as e:
+                    # Handle any errors during processing
+                    error_msg = str(e)
+                    exception_type = type(e).__name__
+                    
+                    # Check for password-related errors
+                    password_keywords = [
+                        "password", "decrypt", "encrypted", "authentication", 
+                        "incorrect password", "file has not been decrypted",
+                        "pdferror", "owner password", "user password",
+                        "not allowed", "encrypted pdf", "permissionerror"
+                    ]
+                    
+                    # Check for invalid format errors
+                    format_keywords = [
+                        "index", "list index", "keyerror", "attributeerror",
+                        "nonetype", "pages", "extract_text"
+                    ]
+                    
+                    # Determine error type
+                    is_password_error = (
+                        exception_type in ["PdfminerException", "PermissionError", "PdfReadError"] or
+                        any(keyword in error_msg.lower() for keyword in password_keywords) or
+                        any(keyword in exception_type.lower() for keyword in ["permission", "password", "decrypt"]) or
+                        (exception_type == "PdfminerException" and len(error_msg.strip()) < 5)
+                    )
+                    
+                    is_format_error = (
+                        exception_type in ["IndexError", "KeyError", "AttributeError", "TypeError"] or
+                        any(keyword in error_msg.lower() for keyword in format_keywords)
+                    )
+                    
+                    if is_password_error:
+                        st.error("❌ **🔒 WRONG PASSWORD!** The password you entered is incorrect. Please check your email for the correct password.")
+                        st.warning("💡 **Tip:** Check your email for the correct password. It's usually sent along with the CAS PDF link.")
+                    elif is_format_error:
+                        st.error("❌ **📄 Invalid File Format!** This doesn't appear to be a valid CAS (Consolidated Account Statement) PDF. Please upload a CAS statement from CAMS/Karvy.")
+                    else:
+                        st.error(f"❌ **⚠️ Error:** {exception_type} - {error_msg if error_msg else 'Unknown error'}")
         
         st.markdown("---")
         
-        st.markdown("""
-        **Features:**
-        - 📊 Complete portfolio analysis with XIRR calculations
-        - 💰 Tax harvesting recommendations (LTCG optimization)
-        - 📈 Scheme-wise performance tracking
-        - 🎯 Multi-fund balanced harvesting strategies
-        - 🔒 100% private - your data never leaves your browser
-        """)
+        # Show appropriate content on landing page
+        if st.session_state.processed_data is not None and not process_clicked:
+            # Data has been processed and we're back on landing page
+            st.success("✅ **Portfolio data loaded!**")
+            
+            data = st.session_state.processed_data
+            st.info(f"📊 Loaded: {len(data['transactions_df'])} transactions | {data['lots_df']['scheme'].nunique()} schemes | {len(data['lots_df'])} lots")
+            
+            st.write("📌 **Use the navigation tabs above to explore your portfolio, or upload a new file to replace current data.**")
+        else:
+            # Show welcome screen when no file uploaded or currently processing
+            st.subheader("Welcome! 👋")
+            
+            st.write("This tool helps you analyze your mutual fund portfolio and optimize tax harvesting strategies.")
+            
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%); 
+                        padding: 1.5rem; border-radius: 0.75rem; border-left: 4px solid rgba(102, 126, 234, 0.6); margin: 1rem 0;">
+                <h4 style="margin: 0 0 1rem 0; color: rgba(102, 126, 234, 1);">📋 How to get your CAS (Consolidated Account Statement):</h4>
+                <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                    <li>Visit <a href="https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement" target="_blank" style="color: rgba(102, 126, 234, 1); text-decoration: none; font-weight: 500;">CAMS website</a> to download "CAS - CAMS+KFintech" statement</li>
+                    <li>For statement type, select <strong>"Detailed (Includes transaction listing)"</strong></li>
+                    <li>For Period, select <strong>"Specific Period"</strong></li>
+                    <li>In From Date, select a date far in the past since the inception of your investments</li>
+                    <li>In To Date, select latest date (today)</li>
+                    <li>In Folio Listing, select <strong>"Transacted folios and folios with balanceinfo"</strong></li>
+                    <li>Enter your email ID registered with mutual funds</li>
+                    <li>Choose a password for your CAS PDF</li>
+                    <li>Submit and check your email</li>
+                    <li>You'll receive the PDF with password in the email</li>
+                    <li>Upload that PDF here!</li>
+                </ol>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            
+            st.markdown("""
+            **Features:**
+            - 📊 Complete portfolio analysis with XIRR calculations
+            - 💰 Tax harvesting recommendations (LTCG optimization)
+            - 📈 Scheme-wise performance tracking
+            - 🎯 Multi-fund balanced harvesting strategies
+            - 🔒 100% private - your data never leaves your browser
+            """)
 
-# OTHER TABS - Use data from session state
-elif active_tab is not None:
+# MUTUAL FUND TABS - Use data from session state
+elif active_tab is not None and app_mode == 'mutual_funds':
     # Check if data is available
     if st.session_state.processed_data is None:
         st.warning("⚠️ No portfolio data loaded. Please go to the Landing Page to upload your CAS PDF.")
