@@ -2629,16 +2629,6 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                         st.info("No debt fund redemptions in current FY")
                 
                 st.markdown("---")
-                total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
-                total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
-                col5.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gain</div><div style='font-size: 28px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
-                
-                # XIRR metric with color coding
-                xirr_color = "green" if total_xirr > 0 else ("red" if total_xirr < 0 else "black")
-                xirr_display = f"{total_xirr:.2f}%"
-                col6.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>XIRR</div><div style='font-size: 28px; font-weight: 600; color: {xirr_color};'>{xirr_display}</div>", unsafe_allow_html=True)
-                
-                st.markdown("---")
                 
                 # Format summary table
                 display_summary = realized_summary_df.copy()
