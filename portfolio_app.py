@@ -2521,7 +2521,25 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 # ========== SUMMARY TABLE ==========
                 st.subheader("📊 Realized Gains Summary")
                 
-                # Calculate totals
+                # Separate by fund type - Equity and Debt
+                equity_df = realized_summary_df[realized_summary_df['fund_type'].str.upper() == 'EQUITY']
+                debt_df = realized_summary_df[realized_summary_df['fund_type'].str.upper() == 'DEBT']
+                
+                # Calculate totals for Equity
+                equity_ltcg = equity_df['ltcg'].sum() if len(equity_df) > 0 else 0
+                equity_stcg = equity_df['stcg'].sum() if len(equity_df) > 0 else 0
+                equity_gain = equity_ltcg + equity_stcg
+                equity_invested = equity_df['invested'].sum() if len(equity_df) > 0 else 0
+                equity_redeemed = equity_df['redeemed'].sum() if len(equity_df) > 0 else 0
+                
+                # Calculate totals for Debt
+                debt_ltcg = debt_df['ltcg'].sum() if len(debt_df) > 0 else 0
+                debt_stcg = debt_df['stcg'].sum() if len(debt_df) > 0 else 0
+                debt_gain = debt_ltcg + debt_stcg
+                debt_invested = debt_df['invested'].sum() if len(debt_df) > 0 else 0
+                debt_redeemed = debt_df['redeemed'].sum() if len(debt_df) > 0 else 0
+                
+                # Calculate overall totals
                 total_ltcg = realized_summary_df['ltcg'].sum()
                 total_stcg = realized_summary_df['stcg'].sum()
                 total_gain = total_ltcg + total_stcg
@@ -2560,6 +2578,57 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 col4.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>STCG</div><div style='font-size: 28px; font-weight: 600; color: {stcg_color};'>{stcg_display}</div>", unsafe_allow_html=True)
                 
                 # Total gain with color coding
+                total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
+                total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
+                col5.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gain</div><div style='font-size: 28px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
+                
+                # XIRR metric with color coding
+                xirr_color = "green" if total_xirr > 0 else ("red" if total_xirr < 0 else "black")
+                xirr_display = f"{total_xirr:.2f}%"
+                col6.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>XIRR</div><div style='font-size: 28px; font-weight: 600; color: {xirr_color};'>{xirr_display}</div>", unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # Show breakup by fund type (Equity vs Debt) - separate taxation
+                st.markdown("### 📋 Breakup by Fund Type (Tax Implications)")
+                
+                col_eq, col_debt = st.columns(2)
+                
+                with col_eq:
+                    st.markdown("#### 🟢 Equity Funds")
+                    if len(equity_df) > 0:
+                        eq_col1, eq_col2, eq_col3 = st.columns(3)
+                        eq_col1.metric("Invested", f"₹{format_indian_number(equity_invested)}")
+                        eq_col2.metric("Redeemed", f"₹{format_indian_number(equity_redeemed)}")
+                        eq_col3.metric("Total Gain", f"₹{format_indian_number(equity_gain)}", delta=None)
+                        
+                        eq_col4, eq_col5 = st.columns(2)
+                        ltcg_eq_color = "green" if equity_ltcg > 0 else "red"
+                        stcg_eq_color = "green" if equity_stcg > 0 else "red"
+                        eq_col4.markdown(f"**LTCG:** <span style='color: {ltcg_eq_color};'>₹{format_indian_number(equity_ltcg)}</span>", unsafe_allow_html=True)
+                        eq_col5.markdown(f"**STCG:** <span style='color: {stcg_eq_color};'>₹{format_indian_number(equity_stcg)}</span>", unsafe_allow_html=True)
+                        st.caption("💡 Equity: LTCG >12 months @ 12.5% (₹1.25L exempt), STCG ≤12 months @ 20%")
+                    else:
+                        st.info("No equity fund redemptions in current FY")
+                
+                with col_debt:
+                    st.markdown("#### 🔵 Debt Funds")
+                    if len(debt_df) > 0:
+                        debt_col1, debt_col2, debt_col3 = st.columns(3)
+                        debt_col1.metric("Invested", f"₹{format_indian_number(debt_invested)}")
+                        debt_col2.metric("Redeemed", f"₹{format_indian_number(debt_redeemed)}")
+                        debt_col3.metric("Total Gain", f"₹{format_indian_number(debt_gain)}", delta=None)
+                        
+                        debt_col4, debt_col5 = st.columns(2)
+                        ltcg_debt_color = "green" if debt_ltcg > 0 else "red"
+                        stcg_debt_color = "green" if debt_stcg > 0 else "red"
+                        debt_col4.markdown(f"**LTCG:** <span style='color: {ltcg_debt_color};'>₹{format_indian_number(debt_ltcg)}</span>", unsafe_allow_html=True)
+                        debt_col5.markdown(f"**STCG:** <span style='color: {stcg_debt_color};'>₹{format_indian_number(debt_stcg)}</span>", unsafe_allow_html=True)
+                        st.caption("💡 Debt: All gains taxed as per income tax slab (no LTCG benefit from Apr 2023)")
+                    else:
+                        st.info("No debt fund redemptions in current FY")
+                
+                st.markdown("---")
                 total_color = "green" if total_gain > 0 else ("red" if total_gain < 0 else "black")
                 total_display = f"₹{format_indian_number(total_gain)}" if total_gain >= 0 else f"-₹{format_indian_number(abs(total_gain))}"
                 col5.markdown(f"<div style='font-size: 14px; color: rgba(49, 51, 63, 0.6);'>Total Gain</div><div style='font-size: 28px; font-weight: 600; color: {total_color};'>{total_display}</div>", unsafe_allow_html=True)
