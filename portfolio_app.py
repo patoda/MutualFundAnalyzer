@@ -2084,13 +2084,35 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 if cat_value > 0:
                     cat_cashflows.append((datetime.now(), cat_value))
                 cat_xirr = calculate_xirr(cat_cashflows) if len(cat_cashflows) > 1 else 0
+
+                # LT/ST split XIRR for this category
+                cat_lt_lots = category_lots[category_lots['is_lt']]
+                cat_st_lots = category_lots[~category_lots['is_lt']]
+
+                cat_lt_value = cat_lt_lots['current_value'].sum()
+                cat_lt_cashflows = []
+                for _, lot in cat_lt_lots.iterrows():
+                    cat_lt_cashflows.append((lot['purchase_date'], -lot['invested']))
+                if cat_lt_value > 0:
+                    cat_lt_cashflows.append((datetime.now(), cat_lt_value))
+                cat_lt_xirr = calculate_xirr(cat_lt_cashflows) if len(cat_lt_cashflows) > 1 else 0
+
+                cat_st_value = cat_st_lots['current_value'].sum()
+                cat_st_cashflows = []
+                for _, lot in cat_st_lots.iterrows():
+                    cat_st_cashflows.append((lot['purchase_date'], -lot['invested']))
+                if cat_st_value > 0:
+                    cat_st_cashflows.append((datetime.now(), cat_st_value))
+                cat_st_xirr = calculate_xirr(cat_st_cashflows) if len(cat_st_cashflows) > 1 else 0
                 
                 category_summary_list.append({
                     'fund_category': category,
                     'invested': cat_invested,
                     'current_value': cat_value,
                     'percentage': cat_percentage,
-                    'xirr': cat_xirr
+                    'xirr': cat_xirr,
+                    'lt_xirr': cat_lt_xirr,
+                    'st_xirr': cat_st_xirr
                 })
             
             category_summary = pd.DataFrame(category_summary_list)
@@ -2112,20 +2134,22 @@ elif active_tab is not None and app_mode == 'mutual_funds':
             category_display = category_summary.copy()
             
             # Keep numeric columns for proper sorting in dataframe
-            category_display_df = category_display[['fund_category', 'xirr', 'current_value', 'invested', 'percentage']].copy()
+            category_display_df = category_display[['xirr', 'lt_xirr', 'st_xirr', 'fund_category', 'current_value', 'invested', 'percentage']].copy()
             category_display_df['gain'] = category_display_df['current_value'] - category_display_df['invested']
             category_display_df['gain_pct'] = (category_display_df['gain'] / category_display_df['invested'] * 100)
             
             # Rename columns for display
-            category_display_df.columns = ['Category', 'XIRR%', 'Value₹', 'Invested₹', 'Portfolio%', 'Gain₹', 'Gain%']
+            category_display_df.columns = ['XIRR%', 'LT XIRR%', 'ST XIRR%', 'Category', 'Value₹', 'Invested₹', 'Portfolio%', 'Gain₹', 'Gain%']
             
             st.dataframe(
                 category_display_df,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Category": st.column_config.TextColumn("Category", width="medium"),
                     "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
+                    "LT XIRR%": st.column_config.NumberColumn("LT XIRR%", format="%.1f%%", width="small"),
+                    "ST XIRR%": st.column_config.NumberColumn("ST XIRR%", format="%.1f%%", width="small"),
+                    "Category": st.column_config.TextColumn("Category", width="medium"),
                     "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
                     "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
                     "Portfolio%": st.column_config.NumberColumn("Portfolio%", format="%.1f%%", width="small", help="Percentage of total portfolio"),
@@ -2147,7 +2171,11 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 schemes_in_category = category_lots['scheme'].unique()
                 
                 # Create expandable section for each category
-                with st.expander(f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | {cat_row['percentage']:.1f}% | XIRR: {cat_row['xirr']:.1f}%)"):
+                with st.expander(
+                    f"**{category}** ({len(schemes_in_category)} funds | ₹{format_indian_number(cat_row['current_value'])} | "
+                    f"{cat_row['percentage']:.1f}% | XIRR: {cat_row['xirr']:.1f}% | "
+                    f"LT XIRR: {cat_row['lt_xirr']:.1f}% | ST XIRR: {cat_row['st_xirr']:.1f}%)"
+                ):
                     # Build fund details for this category
                     fund_details = []
                     for scheme in schemes_in_category:
@@ -2157,6 +2185,8 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                         scheme_value = scheme_lots['current_value'].sum()
                         scheme_gain = scheme_value - scheme_invested
                         scheme_gain_pct = (scheme_gain / scheme_invested * 100) if scheme_invested > 0 else 0
+                        scheme_lt_lots = scheme_lots[scheme_lots['is_lt']]
+                        scheme_st_lots = scheme_lots[~scheme_lots['is_lt']]
                         
                         # Calculate XIRR for this scheme
                         scheme_cashflows = []
@@ -2165,11 +2195,31 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                         if scheme_value > 0:
                             scheme_cashflows.append((datetime.now(), scheme_value))
                         scheme_xirr = calculate_xirr(scheme_cashflows) if len(scheme_cashflows) > 1 else 0
+
+                        # Calculate LT XIRR for this scheme
+                        scheme_lt_value = scheme_lt_lots['current_value'].sum()
+                        scheme_lt_cashflows = []
+                        for _, lot in scheme_lt_lots.iterrows():
+                            scheme_lt_cashflows.append((lot['purchase_date'], -lot['invested']))
+                        if scheme_lt_value > 0:
+                            scheme_lt_cashflows.append((datetime.now(), scheme_lt_value))
+                        scheme_lt_xirr = calculate_xirr(scheme_lt_cashflows) if len(scheme_lt_cashflows) > 1 else 0
+
+                        # Calculate ST XIRR for this scheme
+                        scheme_st_value = scheme_st_lots['current_value'].sum()
+                        scheme_st_cashflows = []
+                        for _, lot in scheme_st_lots.iterrows():
+                            scheme_st_cashflows.append((lot['purchase_date'], -lot['invested']))
+                        if scheme_st_value > 0:
+                            scheme_st_cashflows.append((datetime.now(), scheme_st_value))
+                        scheme_st_xirr = calculate_xirr(scheme_st_cashflows) if len(scheme_st_cashflows) > 1 else 0
                         
                         clean_scheme = clean_fund_name(scheme)
                         fund_details.append({
                             'Fund': clean_scheme[:60] + '...' if len(clean_scheme) > 60 else clean_scheme,
                             'XIRR%': scheme_xirr,
+                            'LT XIRR%': scheme_lt_xirr,
+                            'ST XIRR%': scheme_st_xirr,
                             'Invested₹': scheme_invested,
                             'Value₹': scheme_value,
                             'Gain₹': scheme_gain,
@@ -2186,6 +2236,8 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                         column_config={
                             "Fund": st.column_config.TextColumn("Fund", width="large"),
                             "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
+                            "LT XIRR%": st.column_config.NumberColumn("LT XIRR%", format="%.1f%%", width="small"),
+                            "ST XIRR%": st.column_config.NumberColumn("ST XIRR%", format="%.1f%%", width="small"),
                             "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
                             "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
                             "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
@@ -2218,6 +2270,7 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 y='short_name',
                 x='current_value',
                 color='gain',
+                custom_data=['value_text', 'gain_text'],
                 orientation='h',
                 title='Top 10 Schemes by Current Value',
                 labels={'current_value': 'Value (₹)', 'gain': 'Gain (₹)', 'short_name': 'Scheme'},
@@ -2226,8 +2279,6 @@ elif active_tab is not None and app_mode == 'mutual_funds':
                 hover_data={
                     'current_value': False,
                     'gain': False,
-                    'value_text': True,
-                    'gain_text': True,
                     'short_name': False
                 }
             )
@@ -2261,76 +2312,140 @@ elif active_tab is not None and app_mode == 'mutual_funds':
             if selected_scheme == "All Schemes":
                 # Show summary table of all schemes
                 st.subheader("📊 Portfolio Summary by Scheme")
+
+                holding_filter = st.radio(
+                    "Holding Type",
+                    ["All", "LT Only", "ST Only"],
+                    horizontal=True,
+                    help="Filter summary to all holdings, only long-term holdings, or only short-term holdings"
+                )
                 
                 scheme_summary = []
                 for scheme in sorted(lots_df['scheme'].unique()):
                     scheme_lots = lots_df[lots_df['scheme'] == scheme]
-                    
-                    total_units = scheme_lots['units'].sum()
-                    total_invested = scheme_lots['invested'].sum()
-                    total_value = scheme_lots['current_value'].sum()
-                    total_gain = total_value - total_invested
-                    gain_pct = (total_gain / total_invested * 100) if total_invested > 0 else 0
-                    
+ 
                     # Get granular category instead of generic fund type
                     fund_category = categorize_fund_by_name(scheme)
-                    
-                    # Calculate XIRR for scheme using ONLY current holdings (FIFO-adjusted)
-                    cashflows = []
-                    for _, lot in scheme_lots.iterrows():
-                        cashflows.append((lot['purchase_date'], -lot['invested']))
-                    if total_value > 0:
-                        cashflows.append((datetime.now(), total_value))
-                    xirr = calculate_xirr(cashflows) if len(cashflows) > 1 else 0
-                    
+
                     # LT/ST breakdown
                     lt_lots = scheme_lots[scheme_lots['is_lt']]
                     st_lots = scheme_lots[~scheme_lots['is_lt']]
                     
                     lt_units = lt_lots['units'].sum()
                     st_units = st_lots['units'].sum()
+
+                    # Helper for XIRR using current holdings (FIFO-adjusted)
+                    def lots_xirr(input_lots):
+                        value = input_lots['current_value'].sum()
+                        cashflows = []
+                        for _, lot in input_lots.iterrows():
+                            cashflows.append((lot['purchase_date'], -lot['invested']))
+                        if value > 0:
+                            cashflows.append((datetime.now(), value))
+                        return calculate_xirr(cashflows) if len(cashflows) > 1 else 0
+
+                    # XIRR metrics for all/LT/ST
+                    xirr = lots_xirr(scheme_lots)
+                    lt_xirr = lots_xirr(lt_lots) if len(lt_lots) > 0 else 0
+                    st_xirr = lots_xirr(st_lots) if len(st_lots) > 0 else 0
+
+                    if holding_filter == "LT Only":
+                        if len(lt_lots) == 0:
+                            continue
+                        view_lots = lt_lots
+                        view_units = lt_units
+                        view_xirr = lt_xirr
+                    elif holding_filter == "ST Only":
+                        if len(st_lots) == 0:
+                            continue
+                        view_lots = st_lots
+                        view_units = st_units
+                        view_xirr = st_xirr
+                    else:
+                        view_lots = scheme_lots
+                        view_units = scheme_lots['units'].sum()
+                        view_xirr = xirr
+
+                    total_invested = view_lots['invested'].sum()
+                    total_value = view_lots['current_value'].sum()
+                    total_gain = total_value - total_invested
+                    gain_pct = (total_gain / total_invested * 100) if total_invested > 0 else 0
                     
                     scheme_summary.append({
                         'Scheme': clean_fund_name(scheme),
                         'Category': fund_category,
-                        'Total Units': total_units,
+                        'Total Units': view_units,
                         'LT Units': lt_units,
                         'ST Units': st_units,
                         'Invested': total_invested,
                         'Current Value': total_value,
                         'Gain/Loss': total_gain,
                         'Gain %': gain_pct,
-                        'XIRR': xirr
+                        'XIRR': view_xirr,
+                        'LT XIRR': lt_xirr,
+                        'ST XIRR': st_xirr
                     })
                 
                 summary_df = pd.DataFrame(scheme_summary)
-                
-                # Shorten scheme names and format for display
-                display_df = summary_df.copy()
-                display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:45] + '...' if len(x) > 45 else x)
-                # Keep numeric values for proper sorting
-                final_df = display_df[['Scheme', 'XIRR', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %']].copy()
-                final_df.columns = ['Scheme', 'XIRR%', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%']
-                final_df = final_df.sort_values('Value₹', ascending=False)
-                
-                st.dataframe(
-                    final_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=400,
-                    column_config={
-                        "Scheme": st.column_config.TextColumn("Scheme", width="large"),
-                        "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
-                        "Category": st.column_config.TextColumn("Category", width="medium"),
-                        "Units": st.column_config.NumberColumn("Units", format="%.0f", width="small"),
-                        "LT": st.column_config.NumberColumn("LT", format="%.0f", width="small"),
-                        "ST": st.column_config.NumberColumn("ST", format="%.0f", width="small"),
-                        "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
-                        "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
-                        "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
-                        "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
-                    }
-                )
+
+                if summary_df.empty:
+                    st.warning(f"No schemes found for '{holding_filter}' selection.")
+                    st.info("💡 Try switching the Holding Type filter to view other holdings.")
+                else:
+                    # Shorten scheme names and format for display
+                    display_df = summary_df.copy()
+                    display_df['Scheme'] = display_df['Scheme'].apply(lambda x: x[:45] + '...' if len(x) > 45 else x)
+                    
+                    if holding_filter == "All":
+                        # Keep numeric values for proper sorting
+                        final_df = display_df[['XIRR', 'LT XIRR', 'ST XIRR', 'Scheme', 'Category', 'Total Units', 'LT Units', 'ST Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %']].copy()
+                        final_df.columns = ['XIRR%', 'LT XIRR%', 'ST XIRR%', 'Scheme', 'Category', 'Units', 'LT', 'ST', 'Invested₹', 'Value₹', 'Gain₹', 'Gain%']
+                        final_df = final_df.sort_values('Value₹', ascending=False)
+                        
+                        st.dataframe(
+                            final_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=400,
+                            column_config={
+                                "XIRR%": st.column_config.NumberColumn("XIRR%", format="%.1f%%", width="small"),
+                                "LT XIRR%": st.column_config.NumberColumn("LT XIRR%", format="%.1f%%", width="small"),
+                                "ST XIRR%": st.column_config.NumberColumn("ST XIRR%", format="%.1f%%", width="small"),
+                                "Scheme": st.column_config.TextColumn("Scheme", width="large"),
+                                "Category": st.column_config.TextColumn("Category", width="medium"),
+                                "Units": st.column_config.NumberColumn("Units", format="%.0f", width="small"),
+                                "LT": st.column_config.NumberColumn("LT", format="%.0f", width="small"),
+                                "ST": st.column_config.NumberColumn("ST", format="%.0f", width="small"),
+                                "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
+                                "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
+                                "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
+                                "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
+                            }
+                        )
+                    else:
+                        xirr_col_name = "LT XIRR%" if holding_filter == "LT Only" else "ST XIRR%"
+                        units_col_name = "LT Units" if holding_filter == "LT Only" else "ST Units"
+
+                        final_df = display_df[['XIRR', 'Scheme', 'Category', 'Total Units', 'Invested', 'Current Value', 'Gain/Loss', 'Gain %']].copy()
+                        final_df.columns = [xirr_col_name, 'Scheme', 'Category', units_col_name, 'Invested₹', 'Value₹', 'Gain₹', 'Gain%']
+                        final_df = final_df.sort_values('Value₹', ascending=False)
+
+                        st.dataframe(
+                            final_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=400,
+                            column_config={
+                                xirr_col_name: st.column_config.NumberColumn(xirr_col_name, format="%.1f%%", width="small"),
+                                "Scheme": st.column_config.TextColumn("Scheme", width="large"),
+                                "Category": st.column_config.TextColumn("Category", width="medium"),
+                                units_col_name: st.column_config.NumberColumn(units_col_name, format="%.0f", width="small"),
+                                "Invested₹": st.column_config.NumberColumn("Invested₹", format="₹%.0f", width="medium"),
+                                "Value₹": st.column_config.NumberColumn("Value₹", format="₹%.0f", width="medium"),
+                                "Gain₹": st.column_config.NumberColumn("Gain₹", format="₹%.0f", width="medium"),
+                                "Gain%": st.column_config.NumberColumn("Gain%", format="%.1f%%", width="small"),
+                            }
+                        )
                 
                 st.info("💡 Select a specific scheme from the dropdown above to see detailed lot-level breakdown")
                 
